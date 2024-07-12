@@ -20,7 +20,7 @@ backtest_params = {
 
 # 资金、佣金、滑点设置
 broker_params = {
-    'initial_cash': 100000,
+    'initial_cash': 1000000,
     'commission_rate': 5/10000,
     'slippage': 1/1000
 }
@@ -31,7 +31,7 @@ broker_params = {
 
 # VADStrategy参数
 vad_strategy_params = {
-    'k': 2,
+    'k': 1.6,
     'base_order_amount': 10000,
     'dca_multiplier': 1.5,
     'number_of_dca_orders': 3
@@ -43,5 +43,5 @@ vad_strategy_params = {
 '''
 # VWMA
 indicator_params = {
-    'vwma_period': 14
+    'vwma_period': 200
 }

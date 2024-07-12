@@ -7,5 +7,5 @@ class VWMA(bt.Indicator):
 
     def __init__(self):
         self.addminperiod(self.params.period)
-        volume_price = self.data.close * self.data.volume
+        volume_price = self.data * self.data.volume
         self.lines.vwma = bt.indicators.SumN(volume_price, period=self.params.period) / bt.indicators.SumN(self.data.volume, period=self.params.period)

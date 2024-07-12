@@ -24,7 +24,7 @@ class VWMA(bt.Indicator):
 
 # 定义VAD策略所需的指标计算类
 class VADStrategy(bt.Strategy):
-    params = dict(period=14, k=1.6, vwma_period=20)
+    params = dict(period=14, k=1.6, vwma_period=200)
 
     def __init__(self):
         self.atr = bt.indicators.ATR(self.data, period=self.params.period)

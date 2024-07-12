@@ -4,6 +4,7 @@ from strategy import VADStrategy, BuyAndHoldStrategy
 from texttable import Texttable
 import pandas as pd
 import os
+import pydoc
 
 # 确保结果目录存在
 output_dir = 'data'
@@ -35,8 +36,8 @@ def add_data_and_run_strategy(strategy_class, data_file, name):
         high=2,
         low=3,
         close=4,
-        volume=-1,  # 如果没有 volume 列，设置为 -1
-        openinterest=-1,  # 如果没有 openinterest 列，设置为 -1
+        volume=-1,  #没有 volume 列，设置为 -1
+        openinterest=-1,  # 没有 openinterest 列，设置为 -1
         separator=',',  # 指定分隔符
     )
     
@@ -58,8 +59,9 @@ def add_data_and_run_strategy(strategy_class, data_file, name):
     return results, start_date, end_date
 
 def run_backtest():
+    output = ""  # 用于存储所有输出
     for name, data_file in config.data_files:
-        print(f"\n{name} 分析结果:")
+        output += f"\n{name} 分析结果:\n"
 
         # 运行策略
         buy_and_hold_results, start_date, end_date = add_data_and_run_strategy(BuyAndHoldStrategy, data_file, name)
@@ -83,12 +85,13 @@ def run_backtest():
         excess_total_returns = sum(VAD_returns) - sum(buy_and_hold_returns)
         excess_annual_returns = (pd.Series(VAD_returns).mean() * 252) - (pd.Series(buy_and_hold_returns).mean() * 252)
 
-        # 打印
-        print(f"回测时间：从 {start_date} 到 {end_date}")
-        print(f'BuyAndHold 初始本金为 {config.broker_params["initial_cash"]:.2f}')
-        print(f'BuyAndHold 最终本金为 {config.broker_params["initial_cash"] * (1 + sum(buy_and_hold_returns)):.2f}')
-        print(f'VADStrategy 初始本金为 {config.broker_params["initial_cash"]:.2f}')
-        print(f'VADStrategy 最终本金为 {config.broker_params["initial_cash"] * (1 + sum(VAD_returns)):.2f}')
+        # 添加到输出
+        output += f"回测时间：从 {start_date} 到 {end_date}\n"
+        output += f'BuyAndHold 初始本金为 {config.broker_params["initial_cash"]:.2f}\n'
+        output += f'BuyAndHold 最终本金为 {config.broker_params["initial_cash"] * (1 + sum(buy_and_hold_returns)):.2f}\n'
+        output += f'VADStrategy 初始本金为 {config.broker_params["initial_cash"]:.2f}\n'
+        output += f'VADStrategy 最终本金为 {config.broker_params["initial_cash"] * (1 + sum(VAD_returns)):.2f}\n'
+
 
         table = Texttable()
         table.add_rows([
@@ -107,7 +110,10 @@ def run_backtest():
                          " "]
         ])
 
-        print(table.draw())
+        output += table.draw() + "\n\n"
+
+    # 使用分页器显示输出
+    pydoc.pager(output)
 
 if __name__ == '__main__':
     run_backtest()

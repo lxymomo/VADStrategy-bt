@@ -5,6 +5,10 @@ from texttable import Texttable
 import pandas as pd
 import os
 import pydoc
+from visual import visualize_strategy
+import os
+import re
+
 
 # 确保结果目录存在
 output_dir = 'data'
@@ -53,6 +57,8 @@ def add_data_and_run_strategy(strategy_class, data_file, name):
     cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')  
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades') 
 
     # 运行回测
     results = cerebro.run()
@@ -112,8 +118,42 @@ def run_backtest():
 
         output += table.draw() + "\n\n"
 
+        # # 获取数据
+        # cerebro = bt.Cerebro()
+        # data = bt.feeds.GenericCSVData(
+        #     dataname=data_file,
+        #     dtformat='%Y/%m/%d %H:%M',
+        #     datetime=0,
+        #     open=1,
+        #     high=2,
+        #     low=3,
+        #     close=4,
+        #     volume=-1,
+        #     openinterest=-1,
+        #     separator=',',
+        # )
+        # cerebro.adddata(data)
+        # cerebro.addstrategy(VADStrategy)
+        # cerebro.broker.setcash(config.broker_params['initial_cash'])
+        # cerebro.broker.setcommission(commission=config.broker_params['commission_rate'])
+        
+        # # # 运行回测以获取完整的数据
+        # # results = cerebro.run()
+        
+        # # # 将 Backtrader 的数据转换为 pandas DataFrame
+        # # df = pd.DataFrame(index=data.lines.datetime.array)
+        # # df['open'] = data.lines.open.array
+        # # df['high'] = data.lines.high.array
+        # # df['low'] = data.lines.low.array
+        # # df['close'] = data.lines.close.array
+        # # df.index = pd.to_datetime(df.index)
+        
+        # # # 调用可视化函数
+        # # visualize_strategy(cerebro, results, df)
+
     # 使用分页器显示输出
     pydoc.pager(output)
+
 
 if __name__ == '__main__':
     run_backtest()

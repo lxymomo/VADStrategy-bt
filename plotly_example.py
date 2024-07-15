@@ -62,46 +62,7 @@ def load_data_and_run_strategy(strategy_class, data_file):
 strategy = load_data_and_run_strategy(VADStrategy, data_file)
 
 print("Strategy type:", type(strategy))
-print("Strategy attributes:", dir(strategy))
-
-# 检查数据长度
-print("Data length:", strategy.data.buflen())
-print("Close data length:", len(strategy.data.close))
-print("Prices length:", len(strategy.prices))
-print("VWMA14 values length:", len(strategy.vwma14_values))
-print("ATR values length:", len(strategy.atr_values))
-
-# 获取策略运行的数据长度
-data_length = min(strategy.data.buflen(), len(strategy.prices), len(strategy.vwma14_values), len(strategy.atr_values))
-
-# 提取日期时间和其他数据
-dates = []
-closes = []
-vwma14s = []
-atrs = []
-
-for i in range(data_length):
-    dates.append(bt.num2date(strategy.data.datetime.array[i]).replace(tzinfo=None))
-    closes.append(strategy.prices[i])
-    vwma14s.append(strategy.vwma14_values[i])
-    atrs.append(strategy.atr_values[i])
-
-# 将策略数据转换为 Pandas DataFrame
-df_result = pd.DataFrame({
-    'Date': dates,
-    'Close': closes,
-    'VWMA14': vwma14s,
-    'ATR': atrs
-})
-
-print("Result Data Head:")
-print(df_result.head()) 
-
-# 运行策略并获取数据
-strategy = load_data_and_run_strategy(VADStrategy, data_file)
-
-print("Strategy type:", type(strategy))
-print("Strategy attributes:", dir(strategy))
+# print("Strategy attributes:", dir(strategy))
 
 # 检查数据长度
 print("Data length:", strategy.data.buflen())

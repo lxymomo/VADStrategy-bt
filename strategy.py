@@ -1,12 +1,38 @@
 import backtrader as bt
 import config
-from indicators import VWMA
+# from indicators import VWMA
+import pandas as pd
+from datetime import datetime
 
 '''
 策略
 '''
 
-class VADStrategy(bt.Strategy):
+class BaseStrategy(bt.Strategy):
+    def __init__(self):
+        self.trades = []
+
+    def record_trade(self, order):
+        # 假设 "time" 是数据源中的列名
+        trade_time = self.data.datetime.datetime(0)
+        trade_info = {
+            'time': trade_time.strftime('%Y/%m/%d %H:%M'), # 使用 strftime 格式化日期时间
+            'type': 'BUY' if order.isbuy() else 'SELL',
+            'price': order.executed.price,
+            'size': order.executed.size,
+            'value': order.executed.value,
+            'commission': order.executed.comm,
+        }
+        self.trades.append(trade_info)
+
+    def get_trades_df(self):
+        return pd.DataFrame(self.trades)
+
+    def save_trades_to_csv(self, filename):
+        df = self.get_trades_df()
+        df.to_csv(filename, index=False, date_format='%Y/%m/%d %H:%M')
+
+class VADStrategy(BaseStrategy):
     params = (
         ('k', 1.6),
         ('base_order_amount', 100000),
@@ -17,6 +43,7 @@ class VADStrategy(bt.Strategy):
     )
 
     def __init__(self):
+        super().__init__()
         self.vwma14 = bt.indicators.WeightedMovingAverage(
             self.data.close, period=14, subplot=False
         )
@@ -37,8 +64,6 @@ class VADStrategy(bt.Strategy):
         self.prices = []
         self.vwma14_values = []
         self.atr_values = []
-        self.buy_dates = []
-        self.sell_dates = []
 
     def prenext(self):
         # 在没有足够数据时，只记录价格
@@ -82,6 +107,7 @@ class VADStrategy(bt.Strategy):
             return
 
         if order.status in [order.Completed]:
+            self.record_trade(order)
             if order.isbuy():
                 self.buy_count += 1
                 self.buy_dates.append(self.data.datetime.date())
@@ -99,14 +125,14 @@ class VADStrategy(bt.Strategy):
         dt = dt or self.datas[0].datetime.date(0)
         print(f'{dt.isoformat()} {txt}')
 
-class BuyAndHoldStrategy(bt.Strategy):
+class BuyAndHoldStrategy(BaseStrategy):
     def __init__(self):
+        super().__init__()
         self.buy_count = 0
         self.sell_count = 0
         self.order = None  
         self.buy_executed = False
         self.sell_executed = False
-        # self.log(f'Initial Cash: {self.broker.get_cash()}')
 
     def next(self):
         # 在第一个可交易的 bar 买入
@@ -134,15 +160,13 @@ class BuyAndHoldStrategy(bt.Strategy):
 
     def notify_order(self, order):
         if order.status in [order.Completed]:
+            self.record_trade(order)
             if order.isbuy():
-                # self.log(f'BUY COMPLETED, Price: {order.executed.price}, Size: {order.executed.size}')
                 self.buy_count += 1
             elif order.issell():
-                # self.log(f'SELL COMPLETED, Price: {order.executed.price}, Size: {order.executed.size}')
                 self.sell_count += 1
             self.order = None
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-            # self.log(f'Order Canceled/Margin/Rejected: Status={order.status}, Ref={order.ref}')
             self.order = None
 
     def log(self, txt, dt=None):

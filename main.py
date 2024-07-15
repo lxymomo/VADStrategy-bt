@@ -1,14 +1,12 @@
 import backtrader as bt
 import config
-from strategy import VADStrategy, BuyAndHoldStrategy
-from texttable import Texttable
 import pandas as pd
 import os
 import pydoc
-from visual import visualize_strategy
-import os
-import re
-
+from texttable import Texttable
+from strategy import *
+from visual import *
+from datetime import datetime
 
 # 确保结果目录存在
 output_dir = 'data'
@@ -16,7 +14,7 @@ if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
 def get_csv_date_range(data_file):
-    df = pd.read_csv(data_file, parse_dates=[0])
+    df = pd.read_csv(data_file, parse_dates=['time'], date_format='%Y/%m/%d %H:%M')
     return df.iloc[0, 0].date(), df.iloc[-1, 0].date()
 
 def add_data_and_run_strategy(strategy_class, data_file, name):
@@ -26,8 +24,8 @@ def add_data_and_run_strategy(strategy_class, data_file, name):
     csv_start_date, csv_end_date = get_csv_date_range(data_file)
 
     # 比较CSV日期范围和配置的回测日期范围
-    config_start_date = pd.to_datetime(config.backtest_params['start_date']).date()
-    config_end_date = pd.to_datetime(config.backtest_params['end_date']).date()
+    config_start_date = datetime.strptime('2023/01/01 00:00', '%Y/%m/%d %H:%M').date()
+    config_end_date = datetime.strptime('2023/01/31 23:59', '%Y/%m/%d %H:%M').date()
 
     start_date = max(csv_start_date, config_start_date)
     end_date = min(csv_end_date, config_end_date)
@@ -40,14 +38,14 @@ def add_data_and_run_strategy(strategy_class, data_file, name):
         high=2,
         low=3,
         close=4,
-        volume=-1,  #没有 volume 列，设置为 -1
+        volume=-1,  # 没有 volume 列，设置为 -1
         openinterest=-1,  # 没有 openinterest 列，设置为 -1
         separator=',',  # 指定分隔符
     )
     
     # 添加数据、策略
     cerebro.adddata(data, name=name)
-    cerebro.addstrategy(strategy_class)
+    cerebro.addstrategy(strategy_class) 
 
     # 添加资金、佣金、滑点
     cerebro.broker.setcash(config.broker_params['initial_cash'])
@@ -66,6 +64,7 @@ def add_data_and_run_strategy(strategy_class, data_file, name):
 
 def run_backtest():
     output = ""  # 用于存储所有输出
+    last_start_date, last_end_date = None, None  # 初始化回测日期
     for name, data_file in config.data_files:
         output += f"\n{name} 分析结果:\n"
 
@@ -74,6 +73,9 @@ def run_backtest():
         buy_and_hold_strat = buy_and_hold_results[0]
         VADStrategy_results, start_date, end_date = add_data_and_run_strategy(VADStrategy, data_file, name)
         VADStrategy_strat = VADStrategy_results[0]
+
+        # 更新回测日期
+        last_start_date, last_end_date = start_date, end_date
 
         # 获取 BuyAndHoldStrategy 的分析结果
         buy_and_hold_analysis = buy_and_hold_strat.analyzers.pyfolio.get_analysis()
@@ -118,42 +120,50 @@ def run_backtest():
 
         output += table.draw() + "\n\n"
 
-        # # 获取数据
-        # cerebro = bt.Cerebro()
-        # data = bt.feeds.GenericCSVData(
-        #     dataname=data_file,
-        #     dtformat='%Y/%m/%d %H:%M',
-        #     datetime=0,
-        #     open=1,
-        #     high=2,
-        #     low=3,
-        #     close=4,
-        #     volume=-1,
-        #     openinterest=-1,
-        #     separator=',',
-        # )
-        # cerebro.adddata(data)
-        # cerebro.addstrategy(VADStrategy)
-        # cerebro.broker.setcash(config.broker_params['initial_cash'])
-        # cerebro.broker.setcommission(commission=config.broker_params['commission_rate'])
-        
-        # # # 运行回测以获取完整的数据
-        # # results = cerebro.run()
-        
-        # # # 将 Backtrader 的数据转换为 pandas DataFrame
-        # # df = pd.DataFrame(index=data.lines.datetime.array)
-        # # df['open'] = data.lines.open.array
-        # # df['high'] = data.lines.high.array
-        # # df['low'] = data.lines.low.array
-        # # df['close'] = data.lines.close.array
-        # # df.index = pd.to_datetime(df.index)
-        
-        # # # 调用可视化函数
-        # # visualize_strategy(cerebro, results, df)
+        # 保存交易信息到CSV文件
+        VADStrategy_strat.save_trades_to_csv(f'results/{name}_trades.csv')
 
     # 使用分页器显示输出
     pydoc.pager(output)
 
+    return last_start_date, last_end_date
 
 if __name__ == '__main__':
-    run_backtest()
+    # 运行回测
+    start_date, end_date = run_backtest()  # 获取回测的开始和结束日期
+
+    # 为可视化准备数据
+    cerebro = bt.Cerebro()
+    
+    # 添加数据
+    data = bt.feeds.GenericCSVData(
+        dataname=config.data_files[0][1],  # 使用第一个数据文件
+        dtformat='%Y/%m/%d %H:%M',  # 修改日期格式
+        datetime=0,
+        open=1,
+        high=2,
+        low=3,
+        close=4,
+        volume=-1,
+        openinterest=-1,
+        separator=',',
+    )
+    cerebro.adddata(data)
+    
+    # 添加策略
+    cerebro.addstrategy(VADStrategy)
+    
+    # 设置初始资金
+    cerebro.broker.setcash(config.broker_params['initial_cash'])
+    
+    # 设置佣金
+    cerebro.broker.setcommission(commission=config.broker_params['commission_rate'])
+    
+    # 运行回测
+    results = cerebro.run()
+    
+    # 调用可视化函数
+    app = visualize_strategy(cerebro, results[0], data, start_date, end_date)
+    
+    print("Starting Dash server...")
+    app.run_server(debug=True, use_reloader=False)  # 禁用reloader以避免重复执行

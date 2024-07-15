@@ -14,8 +14,8 @@ data_files = sorted(
 )
 # 回测时间参数
 backtest_params = {
-    'start_date': '2010-6-30',
-    'end_date': '2024-06-30'
+    'start_date': '2010/06/30 9:00',
+    'end_date': '2024/06/30 20:00'
 }
 
 # 资金、佣金、滑点设置

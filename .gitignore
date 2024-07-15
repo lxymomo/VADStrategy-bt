@@ -1,4 +1,5 @@
 original/
 vadresults.py
 test.py
-plotly.py
+data/
+results/

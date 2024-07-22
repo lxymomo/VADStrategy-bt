@@ -12,15 +12,15 @@ def load_data(file_path):
 
 def main():
     # 加载数据
-    data_file = CONFIG['data_files']['qqq_5min']  # 可以根据需要更改
+    data_file = CONFIG['data_files']['qqq_5min']  # 添加文件
     data = load_data(data_file)
 
     # 初始化Cerebro引擎
     cerebro = bt.Cerebro()
 
     # 加载策略
-    strategy_name = 'vad'  # 替换为需要的策略名称，如 'vad' 或 'buyandhold'
-    strategy_class = StrategyFactory.get_strategy(strategy_name)
+    strategy_name = 'vad'  # 添加策略
+    strategy_class = StrategyFactory.get_strategy(strategy_name) 
     cerebro.addstrategy(strategy_class)
 
     # 加载数据
@@ -32,11 +32,18 @@ def main():
     cerebro.broker.setcommission(CONFIG['commission_rate'])
     cerebro.broker.set_slippage_perc(CONFIG['slippage'])
 
+    #
+    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')  
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades') 
+
     # 运行回测
     print(f"初始资金: {cerebro.broker.getvalue():.2f}")
     results = cerebro.run()
     print(f"回测结束后的资金: {cerebro.broker.getvalue():.2f}")
-
+    
     # 输出结果
     port_value = cerebro.broker.getvalue()
     total_return = port_value - CONFIG['initial_cash']

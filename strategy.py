@@ -39,29 +39,29 @@ class VADStrategy(bt.Strategy):
     params = CONFIG['strategy_params']['vad']
 
     def __init__(self):
-        self.vwma = VolumeWeightedMovingAverage(self.data, period=self.params['vwma_period'])
-        self.atr = bt.indicators.AverageTrueRange(self.data, period=self.params['atr_period'])
+        self.vwma = VolumeWeightedMovingAverage(self.data, period=self.p.vwma_period)
+        self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period)
         self.addition_count = 0
         self.last_entry_price = None
         self.total_position = 0
         self.total_amount = 0
 
     def next(self):
-        long_signal = self.data.close < self.vwma - self.params['k'] * self.atr
-        short_signal = self.data.close > self.vwma + self.params['k'] * self.atr
+        long_signal = self.data.close < self.vwma - self.p.k * self.atr
+        short_signal = self.data.close > self.vwma + self.p.k * self.atr
 
         if long_signal and self.addition_count == 0:
-            size = self.params['base_order_amount'] / self.data.close[0]
+            size = self.p.base_order_amount / self.data.close[0]
             self.buy(size=size)
             self.last_entry_price = self.data.close[0]
             self.total_position = size
             self.addition_count = 1
-            self.total_amount = self.params['base_order_amount']
+            self.total_amount = self.p.base_order_amount
             print(f'开仓: 买入 {size} 股，价格: {self.data.close[0]}')
 
-        elif long_signal and self.addition_count < self.params['max_additions'] and self.total_amount < self.params['max_amount']:
-            if self.data.close < self.last_entry_price - self.params['k'] * self.atr:
-                add_amount = self.params['base_order_amount'] * (self.params['dca_multiplier'] ** self.addition_count)
+        elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < self.p.max_amount:
+            if self.data.close < self.last_entry_price - self.p.k * self.atr:
+                add_amount = self.p.base_order_amount * (self.params.dca_multiplier ** self.addition_count)
                 size = add_amount / self.data.close[0]
                 self.buy(size=size)
                 self.last_entry_price = self.data.close[0]

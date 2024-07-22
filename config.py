@@ -7,10 +7,10 @@ CONFIG = {
     'strategy_params': {
         'vad': {
             'k': 1.6,
-            'base_order_amount': 10000,
-            'dca_multiplier': 1.5,
-            'max_additions': 4,
-            'vwma_period': 14,
+            'base_order_amount':10000,
+            'dca_multiplier':1.5,
+            'max_additions':4,
+            'vwma_period':14,
             'atr_period':14,
             'max_amount':100000
         },

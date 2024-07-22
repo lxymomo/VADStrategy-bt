@@ -37,7 +37,6 @@ vad_strategy_params = {
     'number_of_dca_orders': 3
 }
 
-
 '''
 指标 Indicator 参数设置
 '''

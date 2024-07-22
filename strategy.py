@@ -2,7 +2,28 @@
 
 import backtrader as bt
 from config import CONFIG
+import pandas as pd
 
+class TradeRecorder:
+    def __init__(self, strategy):
+        self.strategy = strategy
+        self.data = []
+
+    def record(self):
+        self.data.append({
+            'datetime': self.strategy.data.datetime.datetime(),
+            'close': self.strategy.data.close[0],
+            'vwma': getattr(self.strategy, 'vwma', [None])[0],
+            'atr': getattr(self.strategy, 'atr', [None])[0],
+            'position_size': self.strategy.position.size,
+            'equity': self.strategy.broker.getvalue(),
+            'buy_signal': self.strategy.buy_signal() if hasattr(self.strategy, 'buy_signal') else None,
+            'sell_signal': self.strategy.sell_signal() if hasattr(self.strategy, 'sell_signal') else None
+        })
+
+    def get_analysis(self):
+        return pd.DataFrame(self.data)
+    
 class VolumeWeightedMovingAverage(bt.Indicator):
     lines = ('vwma',)
     params = (('period', 14),)
@@ -24,16 +45,22 @@ class StrategyFactory:
     @staticmethod
     def get_strategy(name, **kwargs):
         if name == 'vad':
-            return VADStrategy
+            strategy_class = VADStrategy
         elif name == 'buyandhold':
-            return BuyAndHoldStrategy
+            strategy_class = BuyAndHoldStrategy
         else:
             raise ValueError("Strategy not implemented")
 
-import backtrader as bt
+        class RecordingStrategy(strategy_class):
+            def __init__(self):
+                super(RecordingStrategy, self).__init__()
+                self.trade_recorder = TradeRecorder(self)
 
-import backtrader as bt
-from config import CONFIG
+            def next(self):
+                super(RecordingStrategy, self).next()
+                self.trade_recorder.record()
+
+        return RecordingStrategy
 
 class VADStrategy(bt.Strategy):
     params = CONFIG['strategy_params']['vad']
@@ -68,7 +95,7 @@ class VADStrategy(bt.Strategy):
                 self.addition_count += 1
                 self.total_position += size
                 self.total_amount += add_amount
-                print(f'加仓: 买入 {add_amount} 股，总持仓: {self.total_position} 股，价格: {self.data.close[0]}')
+                print(f'加仓: 买入 {size} 股，总持仓: {self.total_position} 股，价格: {self.data.close[0]}')
 
         elif short_signal and self.total_position > 0:
             price_change = self.data.close[0] - self.last_entry_price
@@ -95,3 +122,9 @@ class BuyAndHoldStrategy(bt.Strategy):
     def next(self):
         if not self.position:
             self.buy()
+
+    def buy_signal(self):
+        return not self.position
+
+    def sell_signal(self):
+        return False

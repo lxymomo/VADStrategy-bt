@@ -14,7 +14,7 @@ data_files = sorted(
 )
 # 回测时间参数
 backtest_params = {
-    'start_date': '2010/06/30 9:00',
+    'start_date': '2023/06/30 12:00',
     'end_date': '2024/06/30 20:00'
 }
 
@@ -37,10 +37,28 @@ vad_strategy_params = {
     'number_of_dca_orders': 3
 }
 
+# BuyAndHoldStrategy参数
+buy_and_hold_strategy_params = {}
+
 '''
 指标 Indicator 参数设置
 '''
 # VWMA
 indicator_params = {
-    'vwma_period': 200
+    'vwma_period': 14
+}
+
+# 整合所有策略参数
+strategy_params = {
+    'VAD': vad_strategy_params,
+    'BuyAndHold': buy_and_hold_strategy_params
+}
+
+# 整合所有配置
+config = {
+    'data_files': data_files,
+    'backtest_params': backtest_params,
+    'broker_params': broker_params,
+    'strategy_params': strategy_params,
+    'indicator_params': indicator_params
 }

@@ -1,7 +1,7 @@
 # config.py
 
 CONFIG = {
-    'initial_cash': 1000000,
+    'initial_cash': 100000,
     'commission_rate': 5 / 10000,
     'slippage': 1 / 1000,
     'strategy_params': {
@@ -12,9 +12,9 @@ CONFIG = {
             'max_additions':4,
             'vwma_period':14,
             'atr_period':14,
-            'max_amount':100000
         },
-        'buyandhold': {}
+        'buyandhold': {
+        }
     },
     'data_files': {
         'qqq_5min': 'processed/BATS_QQQ_5min.csv',

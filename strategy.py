@@ -31,6 +31,10 @@ class TradeRecorder:
 
     # 这个方法记录每个时间点的交易数据
     def record(self):
+        current_value = self.strategy.broker.getvalue()
+        initial_value = self.strategy.broker.startingcash
+        pnl_pct = (current_value - initial_value) / initial_value * 100 if initial_value != 0 else 0
+
         self.data.append({
             'datetime': self.strategy.data.datetime.datetime(),
             'close': self.strategy.data.close[0],
@@ -39,7 +43,9 @@ class TradeRecorder:
             'position_size': self.strategy.position.size,
             'equity': self.strategy.broker.getvalue(),
             'buy_signal': self.strategy.buy_signal() if hasattr(self.strategy, 'buy_signal') else None,
-            'sell_signal': self.strategy.sell_signal() if hasattr(self.strategy, 'sell_signal') else None
+            'sell_signal': self.strategy.sell_signal() if hasattr(self.strategy, 'sell_signal') else None,
+            'trade_count': getattr(self.strategy, 'trade_count', 0),
+            'pnl_pct': pnl_pct if initial_value != 0 else None 
         })
 
     # 将记录的数据转换为pandas DataFrame格式
@@ -58,23 +64,8 @@ class StrategyFactory:
         if strategy_class_name is None:
             raise ValueError(f"Strategy '{name}' not implemented")
         
-        # 动态导入策略类
         module = __import__('strategy', fromlist=[strategy_class_name])
-        strategy_class = getattr(module, strategy_class_name)
-
-        class RecordingStrategy(strategy_class):
-            def __init__(self):
-                super(RecordingStrategy, self).__init__()
-                self.trade_recorder = TradeRecorder(self)
-
-            def notify_order(self, order):
-                if order.status == order.Completed:
-                    self.trade_recorder.record()
-
-            def next(self):
-                super(RecordingStrategy, self).next()
-
-        return RecordingStrategy
+        return getattr(module, strategy_class_name)
 
 class VADStrategy(bt.Strategy):
     params = CONFIG['strategy_params']['vad']
@@ -83,9 +74,13 @@ class VADStrategy(bt.Strategy):
         self.vwma = VolumeWeightedMovingAverage(self.data, period=self.p.vwma_period)
         self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period)
         self.addition_count = 0
+        self.takeprofit = False
         self.last_entry_price = None
         self.total_position = 0
         self.total_amount = 0
+        self.trade_count = 0
+        self.trade_recorder = TradeRecorder(self)
+        self.processed_orders = set()  # 新增：用于跟踪已处理的订单
 
     def next(self):
         long_signal = self.data.close < self.vwma - self.p.k * self.atr
@@ -98,9 +93,8 @@ class VADStrategy(bt.Strategy):
             self.total_position = size
             self.addition_count = 1
             self.total_amount = self.p.base_order_amount
-            print(f'开仓: 买入 {size} 股，价格: {self.data.close[0]}')
-
-        elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < self.p.max_amount:
+            
+        elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < CONFIG['initial_cash']:
             if self.data.close < self.last_entry_price - self.p.k * self.atr:
                 add_amount = self.p.base_order_amount * (self.params.dca_multiplier ** self.addition_count)
                 size = add_amount / self.data.close[0]
@@ -109,18 +103,17 @@ class VADStrategy(bt.Strategy):
                 self.addition_count += 1
                 self.total_position += size
                 self.total_amount += add_amount
-                print(f'加仓: 买入 {size} 股，总持仓: {self.total_position} 股，价格: {self.data.close[0]}')
 
         elif short_signal and self.total_position > 0:
+            self.takeprofit = True
             price_change = self.data.close[0] - self.last_entry_price
             if price_change >= self.total_position * self.atr:
                 self.sell(size=self.total_position)
-                print(f'止盈: 卖出所有持仓，总持仓: {self.total_position} 股，价格: {self.data.close[0]}')
                 self.reset_position()
-
+                
             elif price_change <= -self.total_position * self.atr:
+                self.takeprofit = False
                 self.sell(size=self.total_position)
-                print(f'止损: 卖出所有持仓，总持仓: {self.total_position} 股，价格: {self.data.close[0]}')
                 self.reset_position()
 
     def reset_position(self):
@@ -129,19 +122,79 @@ class VADStrategy(bt.Strategy):
         self.total_amount = 0
         self.last_entry_price = None
 
+    def buy_signal(self):
+        return self.data.close < self.vwma - self.p.k * self.atr
+
+    def sell_signal(self):
+        return self.data.close > self.vwma + self.p.k * self.atr
+
+    def notify_order(self, order):
+        if order.status == order.Completed and order.ref not in self.processed_orders:
+            self.processed_orders.add(order.ref)  # 标记订单为已处理
+            self.trade_count += 1
+            if order.isbuy():
+                if self.addition_count == 0:
+                    print(f'开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                else:
+                    print(f'加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+            elif order.issell():
+                if self.takeprofit:
+                    print(f'止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}')
+                else:
+                    print(f'止损：卖出 {order.executed.size} 股，价格: {order.executed.price}')
+            self.trade_recorder.record() 
+
 class BuyAndHoldStrategy(bt.Strategy):
-    params = CONFIG['strategy_params']['vad']
+    params = CONFIG['strategy_params']['buyandhold']
 
     def __init__(self):
         self.order = None
+        self.bought = False
+        self.trade_count = 0
+        self.trade_recorder = TradeRecorder(self)
+        self.processed_orders = set()  # 新增：用于跟踪已处理的订单
+        self.first_bar = True # 新增：第一根bar检查
 
     def next(self):
-        if not self.position and not self.order:
-            size = self.p.max_amount / self.data.close[0]
-            self.order = self.buy(size=size)
+        if self.first_bar and not self.bought and not self.order:
+            cash = self.broker.getcash()
+            value = self.broker.getvalue()
+            price = self.data.close[0]
+
+            if cash > 0 and price > 0:
+                size = value / price  # 买入所有可用资金对应的股数
+                size = int(size)  # 向下取整到小数点后两位
+                
+                if size > 0:
+                    self.order = self.buy(size=size)
+                    print(f'尝试买入: {size} 股，当前价格: {price}')
+                else:
+                    print(f'可用资金不足，无法买入。现金: {cash}, 价格: {price}')
+            else:
+                print(f'无法买入。现金: {cash}, 价格: {price}')
+    
+        self.first_bar = False
+        self.trade_recorder.record()
+
+    def notify_order(self, order):
+        if order.status in [order.Submitted, order.Accepted]:
+            return
+
+        if order.status == order.Completed and order.ref not in self.processed_orders:
+            self.processed_orders.add(order.ref)
+            self.trade_count += 1
+            if order.isbuy():
+                print(f'买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                self.bought = True
+            self.order = None
+            self.trade_recorder.record()
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            print(f'订单失败。状态: {order.status}')
+            self.bought = False
+            self.order = None
 
     def buy_signal(self):
-        return not self.position
+        return not self.position and self.first_bar
 
     def sell_signal(self):
         return False

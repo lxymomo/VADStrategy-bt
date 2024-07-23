@@ -24,8 +24,6 @@ def run_strategy(data_file, strategy_name, strategy_params):
 
     # 设置初始现金、佣金率、滑点
     cerebro.broker.setcash(CONFIG['initial_cash'])
-    cerebro.broker.setcommission(CONFIG['commission_rate'])
-    cerebro.broker.set_slippage_perc(CONFIG['slippage'])
 
     # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')

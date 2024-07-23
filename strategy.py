@@ -81,25 +81,31 @@ class VADStrategy(bt.Strategy):
         self.trade_count = 0
         self.trade_recorder = TradeRecorder(self)
         self.processed_orders = set()  # 新增：用于跟踪已处理的订单
+        self.first_order_amount = None # 新增：用于跟踪base_order_amount（考虑佣金）
 
     def next(self):
         long_signal = self.data.close < self.vwma - self.p.k * self.atr
         short_signal = self.data.close > self.vwma + self.p.k * self.atr
+        commission = CONFIG['commission_rate']
+        slippage = CONFIG['slippage'] 
+        close = self.data.close[0] * (1 + slippage)
+        value = self.broker.getvalue() 
 
         if long_signal and self.addition_count == 0:
-            size = self.p.base_order_amount / self.data.close[0]
+            self.first_order_amount = self.p.base_order_amount * (1 - commission)
+            size = int(self.first_order_amount / close)
             self.buy(size=size)
-            self.last_entry_price = self.data.close[0]
+            self.last_entry_price = close
             self.total_position = size
             self.addition_count = 1
-            self.total_amount = self.p.base_order_amount
+            self.total_amount = self.first_order_amount
             
-        elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < CONFIG['initial_cash']:
+        elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < value:
             if self.data.close < self.last_entry_price - self.p.k * self.atr:
-                add_amount = self.p.base_order_amount * (self.params.dca_multiplier ** self.addition_count)
-                size = add_amount / self.data.close[0]
+                add_amount = self.first_order_amount * (self.params.dca_multiplier ** self.addition_count) * (1 - commission)
+                size = int(add_amount / close)
                 self.buy(size=size)
-                self.last_entry_price = self.data.close[0]
+                self.last_entry_price = close
                 self.addition_count += 1
                 self.total_position += size
                 self.total_amount += add_amount
@@ -127,6 +133,27 @@ class VADStrategy(bt.Strategy):
 
     def sell_signal(self):
         return self.data.close > self.vwma + self.p.k * self.atr
+    
+    def calculate_net_profit(self, sell_size):
+        # 获取当前总价值
+        current_value = self.broker.getvalue()
+        
+        # 计算平均买入价格
+        avg_buy_price = self.total_amount / self.total_position if self.total_position > 0 else 0
+        
+        # 计算卖出价格（考虑滑点）
+        sell_price = self.data.close[0] * (1 - CONFIG['slippage'])
+        
+        # 计算卖出总额（考虑佣金）
+        sell_amount = sell_size * sell_price * (1 - CONFIG['commission_rate'])
+        
+        # 计算买入成本
+        buy_cost = sell_size * avg_buy_price
+        
+        # 计算净收益
+        net_profit = sell_amount - buy_cost
+        
+        return net_profit
 
     def notify_order(self, order):
         if order.status == order.Completed and order.ref not in self.processed_orders:
@@ -139,9 +166,10 @@ class VADStrategy(bt.Strategy):
                     print(f'加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
             elif order.issell():
                 if self.takeprofit:
-                    print(f'止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}')
+                    net_profit = self.calculate_net_profit(order.executed.size)
+                    print(f'止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
                 else:
-                    print(f'止损：卖出 {order.executed.size} 股，价格: {order.executed.price}')
+                    print(f'止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
             self.trade_recorder.record() 
 
 class BuyAndHoldStrategy(bt.Strategy):
@@ -156,22 +184,20 @@ class BuyAndHoldStrategy(bt.Strategy):
         self.first_bar = True # 新增：第一根bar检查
 
     def next(self):
-        if self.first_bar and not self.bought and not self.order:
-            cash = self.broker.getcash()
-            value = self.broker.getvalue()
-            price = self.data.close[0]
+        cash = self.broker.getcash()
+        slippage = CONFIG['slippage']
+        commission = CONFIG['commission_rate']
+        price = self.data.close[0] * (1 + slippage)
 
-            if cash > 0 and price > 0:
-                size = value / price  # 买入所有可用资金对应的股数
-                size = int(size)  # 向下取整到小数点后两位
-                
-                if size > 0:
-                    self.order = self.buy(size=size)
-                    print(f'尝试买入: {size} 股，当前价格: {price}')
-                else:
-                    print(f'可用资金不足，无法买入。现金: {cash}, 价格: {price}')
+        if self.first_bar and not self.bought and not self.order:
+            size = cash * (1 - commission) / price  # 买入所有可用资金对应的股数
+            size = int(size) 
+            
+            if size > 0:
+                self.order = self.buy(size=size)
+                print(f'尝试买入: {size} 股，当前价格: {price}')
             else:
-                print(f'无法买入。现金: {cash}, 价格: {price}')
+                print(f'可用资金不足，无法买入。现金: {cash}, 价格: {price}')
     
         self.first_bar = False
         self.trade_recorder.record()

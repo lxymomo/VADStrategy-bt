@@ -17,23 +17,6 @@ def load_data(file_path):
     data = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
     return data
 
-# 记录每笔交易
-class TradeRecorder(bt.Observer):
-    lines = ('close', 'vwma_plus_atr', 'vwma_minus_atr', 'position_size', 'equity', 'buy_signal', 'sell_signal', 'vwma', 'atr')
-    
-    def __init__(self):
-        super(TradeRecorder, self).__init__()
-        self.order = None
-
-    def next(self):
-        self.lines.close[0] = self.datas[0].close[0]
-        self.lines.vwma_plus_atr[0] = self.strategy.vwma[0] + self.strategy.atr[0]
-        self.lines.vwma_minus_atr[0] = self.strategy.vwma[0] - self.strategy.atr[0]
-        self.lines.buy_signal[0] = 1 if self.strategy.buy_signal() else 0
-        self.lines.sell_signal[0] = 1 if self.strategy.sell_signal() else 0
-        self.lines.position_size[0] = self.strategy.position.size
-        self.lines.equity[0] = self.strategy.broker.getvalue()
-
 # 打印策略结果
 def print_analysis(results, strategy_name, data_name):
     first_strat = results[0]
@@ -83,6 +66,7 @@ def run_strategy(cerebro, data_file, strategy_name, strategy_params):
 
     # 加载策略
     strategy_class = StrategyFactory.get_strategy(strategy_name)
+    print(f"Using strategy class: {strategy_class.__name__}")
     cerebro.addstrategy(strategy_class, **strategy_params)
 
     # 设置初始现金、佣金率、滑点

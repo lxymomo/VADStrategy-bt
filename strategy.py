@@ -4,29 +4,10 @@ import backtrader as bt
 from config import CONFIG
 import pandas as pd
 
-class TradeRecorder:
-    def __init__(self, strategy):
-        self.strategy = strategy
-        self.data = []
-
-    def record(self):
-        self.data.append({
-            'datetime': self.strategy.data.datetime.datetime(),
-            'close': self.strategy.data.close[0],
-            'vwma': getattr(self.strategy, 'vwma', [None])[0],
-            'atr': getattr(self.strategy, 'atr', [None])[0],
-            'position_size': self.strategy.position.size,
-            'equity': self.strategy.broker.getvalue(),
-            'buy_signal': self.strategy.buy_signal() if hasattr(self.strategy, 'buy_signal') else None,
-            'sell_signal': self.strategy.sell_signal() if hasattr(self.strategy, 'sell_signal') else None
-        })
-
-    def get_analysis(self):
-        return pd.DataFrame(self.data)
-    
+# 计算VWMA
 class VolumeWeightedMovingAverage(bt.Indicator):
     lines = ('vwma',)
-    params = (('period', 14),)
+    params = (('period', CONFIG['strategy_params']['vad']['vwma_period']),)
 
     def __init__(self):
         self.addminperiod(self.params.period)
@@ -41,24 +22,57 @@ class VolumeWeightedMovingAverage(bt.Indicator):
 
         self.lines.vwma[0] = total_price_volume / total_volume
 
+# 记录交易过程中的数据
+class TradeRecorder:
+    # 初始化时接收一个策略对象，并存储记录
+    def __init__(self, strategy):
+        self.strategy = strategy
+        self.data = []
+
+    # 这个方法记录每个时间点的交易数据
+    def record(self):
+        self.data.append({
+            'datetime': self.strategy.data.datetime.datetime(),
+            'close': self.strategy.data.close[0],
+            'vwma': getattr(self.strategy, 'vwma', [None])[0],
+            'atr': getattr(self.strategy, 'atr', [None])[0],
+            'position_size': self.strategy.position.size,
+            'equity': self.strategy.broker.getvalue(),
+            'buy_signal': self.strategy.buy_signal() if hasattr(self.strategy, 'buy_signal') else None,
+            'sell_signal': self.strategy.sell_signal() if hasattr(self.strategy, 'sell_signal') else None
+        })
+
+    # 将记录的数据转换为pandas DataFrame格式
+    def get_analysis(self):
+        return pd.DataFrame(self.data)
+    
 class StrategyFactory:
+    strategy_map = {
+        'vad': 'VADStrategy',
+        'buyandhold': 'BuyAndHoldStrategy'
+    }
+
     @staticmethod
     def get_strategy(name, **kwargs):
-        if name == 'vad':
-            strategy_class = VADStrategy
-        elif name == 'buyandhold':
-            strategy_class = BuyAndHoldStrategy
-        else:
-            raise ValueError("Strategy not implemented")
+        strategy_class_name = StrategyFactory.strategy_map.get(name)
+        if strategy_class_name is None:
+            raise ValueError(f"Strategy '{name}' not implemented")
+        
+        # 动态导入策略类
+        module = __import__('strategy', fromlist=[strategy_class_name])
+        strategy_class = getattr(module, strategy_class_name)
 
         class RecordingStrategy(strategy_class):
             def __init__(self):
                 super(RecordingStrategy, self).__init__()
                 self.trade_recorder = TradeRecorder(self)
 
+            def notify_order(self, order):
+                if order.status == order.Completed:
+                    self.trade_recorder.record()
+
             def next(self):
                 super(RecordingStrategy, self).next()
-                self.trade_recorder.record()
 
         return RecordingStrategy
 
@@ -116,12 +130,15 @@ class VADStrategy(bt.Strategy):
         self.last_entry_price = None
 
 class BuyAndHoldStrategy(bt.Strategy):
+    params = CONFIG['strategy_params']['vad']
+
     def __init__(self):
         self.order = None
 
     def next(self):
-        if not self.position:
-            self.buy()
+        if not self.position and not self.order:
+            size = self.p.max_amount / self.data.close[0]
+            self.order = self.buy(size=size)
 
     def buy_signal(self):
         return not self.position

@@ -7,7 +7,7 @@ import pandas as pd
 # 计算VWMA
 class VolumeWeightedMovingAverage(bt.Indicator):
     lines = ('vwma',)
-    params = (('period', CONFIG['strategy_params']['vad']['vwma_period']),)
+    params = (('period', 14),) 
 
     def __init__(self):
         self.addminperiod(self.params.period)
@@ -68,11 +68,31 @@ class StrategyFactory:
         return getattr(module, strategy_class_name)
 
 class VADStrategy(bt.Strategy):
-    params = CONFIG['strategy_params']['vad']
+    params = (
+        ('timeframe', None),
+        ('k', None),
+        ('base_order_amount', None),
+        ('dca_multiplier', None),
+        ('max_additions', None),
+        ('vwma_period', None),
+        ('atr_period', None),
+    )
 
     def __init__(self):
-        self.vwma = VolumeWeightedMovingAverage(self.data, period=self.p.vwma_period)
-        self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period)
+        if self.p.timeframe not in CONFIG['strategies']['vad']['enabled_timeframes']:
+            raise ValueError(f"Unsupported timeframe: {self.p.timeframe}")
+
+        # 使用传入的参数或默认值
+        self.k = self.p.k
+        self.base_order_amount = self.p.base_order_amount
+        self.dca_multiplier = self.p.dca_multiplier
+        self.max_additions = self.p.max_additions
+        self.vwma_period = self.p.vwma_period
+        self.atr_period = self.p.atr_period
+
+        self.vwma = VolumeWeightedMovingAverage(self.data, period=self.vwma_period)
+        self.atr = bt.indicators.ATR(self.data, period=self.atr_period)
+
         self.addition_count = 0
         self.takeprofit = False
         self.last_entry_price = None
@@ -134,23 +154,12 @@ class VADStrategy(bt.Strategy):
     def sell_signal(self):
         return self.data.close > self.vwma + self.p.k * self.atr
     
+    # 计算盈亏利润
     def calculate_net_profit(self, sell_size):
-        # 获取当前总价值
-        current_value = self.broker.getvalue()
-        
-        # 计算平均买入价格
         avg_buy_price = self.total_amount / self.total_position if self.total_position > 0 else 0
-        
-        # 计算卖出价格（考虑滑点）
         sell_price = self.data.close[0] * (1 - CONFIG['slippage'])
-        
-        # 计算卖出总额（考虑佣金）
         sell_amount = sell_size * sell_price * (1 - CONFIG['commission_rate'])
-        
-        # 计算买入成本
         buy_cost = sell_size * avg_buy_price
-        
-        # 计算净收益
         net_profit = sell_amount - buy_cost
         
         return net_profit
@@ -160,22 +169,25 @@ class VADStrategy(bt.Strategy):
             self.processed_orders.add(order.ref)  # 标记订单为已处理
             self.trade_count += 1
             if order.isbuy():
-                if self.addition_count == 0:
+                if self.addition_count == 1:
                     print(f'开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                 else:
                     print(f'加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
             elif order.issell():
                 if self.takeprofit:
-                    net_profit = self.calculate_net_profit(order.executed.size)
+                    net_profit = abs(self.calculate_net_profit(order.executed.size))
                     print(f'止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
                 else:
                     print(f'止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
             self.trade_recorder.record() 
 
 class BuyAndHoldStrategy(bt.Strategy):
-    params = CONFIG['strategy_params']['buyandhold']
+    params = (('timeframe', None),)
 
     def __init__(self):
+        if self.p.timeframe not in CONFIG['strategies']['buyandhold']['enabled_timeframes']:
+            raise ValueError(f"Unsupported timeframe: {self.p.timeframe}")
+        
         self.order = None
         self.bought = False
         self.trade_count = 0

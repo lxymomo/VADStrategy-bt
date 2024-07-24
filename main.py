@@ -5,6 +5,7 @@ import backtrader as bt
 import numpy as np
 from config import CONFIG
 from strategy import StrategyFactory
+from analyzers import CustomDrawDown
 
 # 确保输出目录存在
 def ensure_dir(file_path):
@@ -27,7 +28,7 @@ def run_strategy(data_file, strategy_name, strategy_params):
 
     # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(CustomDrawDown, _name='drawdown')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
 
@@ -35,16 +36,16 @@ def run_strategy(data_file, strategy_name, strategy_params):
     data = load_data(data_file)
     start_date = data.index[0].date()
     end_date = data.index[-1].date()
-    num_years = (end_date - start_date).days / 365.25  # 使用实际的日期范围
+    num_years = (end_date - start_date).days / 365.25
     print(f"交易年数: {num_years:.2f}")
     
     data_feed = bt.feeds.PandasData(dataname=data)
     cerebro.adddata(data_feed)
 
-    # 加载策略
+    # 加载参数和策略
+    timeframe = '5min' if '5min' in data_file else '240min'
     strategy_class = StrategyFactory.get_strategy(strategy_name)
-    print(f"Using strategy class: {strategy_class.__name__}")
-    cerebro.addstrategy(strategy_class, **strategy_params)
+    cerebro.addstrategy(strategy_class, timeframe=timeframe, **strategy_params)
 
     # 运行回测
     print(f"初始资金: {cerebro.broker.getvalue():.2f}")
@@ -79,7 +80,7 @@ def print_analysis(results, num_years, strategy_name, data_name):
         profit_factor = float('inf') if winning_trades > 0 else 0
 
     max_drawdown = drawdown.get('max', {}).get('drawdown', 0)
-    max_drawdown_duration = drawdown.get('max', {}).get('len', 0)
+    max_drawdown_money = drawdown.get('max', {}).get('moneydown', 0)
 
     # 计算最大连续盈利和亏损次数
     try:
@@ -95,7 +96,7 @@ def print_analysis(results, num_years, strategy_name, data_name):
         "总收益率": f"{total_return:.2%}",
         "年化收益率": f"{annual_return:.2%}",
         "最大回撤": f"{max_drawdown:.2%}",
-        "最大回撤持续期": max_drawdown_duration,
+        "最大回撤金额":f"${max_drawdown_money:.2f}",
         "总交易次数": total_trades,
         "盈利交易次数": winning_trades,
         "亏损交易次数": losing_trades,
@@ -117,33 +118,28 @@ def main():
     all_results = []  # 用于存储所有分析结果的列表
 
     # 运行所有策略组合
-    for strategy_name, strategy_params in CONFIG['strategy_params'].items():
-        for data_name, data_file in CONFIG['data_files'].items():
-            print(f"\n运行策略: {strategy_name} 数据: {data_name}")
+    for strategy_name, strategy_config in CONFIG['strategies'].items():
+        for timeframe in strategy_config['enabled_timeframes']:
+            data_file = CONFIG['data_files'][f'qqq_{timeframe}']
+            strategy_params = strategy_config['params'][timeframe] if strategy_config['params'] else {}
+
+            print(f"\n运行策略: {strategy_name} 数据: {data_file}")
             cerebro, results, num_years = run_strategy(data_file, strategy_name, strategy_params)
             
-            # 获取分析结果
-            analysis_results = print_analysis(results, num_years, strategy_name, data_name)
-
-            # 添加时间间隔信息到分析结果
+            analysis_results = print_analysis(results, num_years, strategy_name, data_file)
             analysis_results['时间间隔'] = f"{num_years:.2f}年"
-
-            # 将分析结果添加到all_results列表
             all_results.append(analysis_results)
             
-            # 导出交易记录
             strategy = results[0]
             df = strategy.trade_recorder.get_analysis()
             
-            output_file = f"{CONFIG['output_dir']}{strategy_name}_{data_name}_trades.csv"
+            output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades.csv"
             ensure_dir(output_file)
             df.to_csv(output_file)
             print(f"交易记录已保存到: {output_file}")
 
-    # 将所有结果合并为一个DataFrame
+    # 合并结果数据，调整顺序
     all_results_df = pd.DataFrame(all_results)
-
-    # 重新排列列的顺序，确保'策略'、'数据'和'时间间隔'在前面
     columns_order = ['策略', '数据', '时间间隔'] + [col for col in all_results_df.columns if col not in ['策略', '数据', '时间间隔']]
     all_results_df = all_results_df[columns_order]
 

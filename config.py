@@ -4,16 +4,31 @@ CONFIG = {
     'initial_cash': 100000,
     'commission_rate': 5 / 10000,
     'slippage': 1 / 1000,
-    'strategy_params': {
+    'strategies': {
         'vad': {
-            'k': 1.6,
-            'base_order_amount':10000,
-            'dca_multiplier':1.5,
-            'max_additions':4,
-            'vwma_period':14,
-            'atr_period':14,
+            'enabled_timeframes': ['5min', '240min'],
+            'params': {
+                '5min': {
+                    'k': 1.6,
+                    'base_order_amount': 10000,
+                    'dca_multiplier': 1.5,
+                    'max_additions': 4,
+                    'vwma_period': 14,
+                    'atr_period': 14
+                },
+                '240min': {
+                    'k': 0.3,
+                    'base_order_amount': 10000,
+                    'dca_multiplier': 1.5,
+                    'max_additions': 4,
+                    'vwma_period': 14,
+                    'atr_period': 14
+                }
+            }
         },
         'buyandhold': {
+            'enabled_timeframes': ['5min', '240min'],
+            'params': None
         }
     },
     'data_files': {

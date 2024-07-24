@@ -2,10 +2,9 @@
 import os
 import pandas as pd
 import backtrader as bt
-import numpy as np
 from config import CONFIG
 from strategy import StrategyFactory
-from analyzers import CustomDrawDown
+from analyzers import CustomDrawDown, CustomReturns, CustomTradeAnalyzer
 
 # 确保输出目录存在
 def ensure_dir(file_path):
@@ -28,9 +27,9 @@ def run_strategy(data_file, strategy_name, strategy_params):
 
     # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-    cerebro.addanalyzer(CustomDrawDown, _name='drawdown')
-    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+    cerebro.addanalyzer(CustomDrawDown, _name='custom_drawdown')
+    cerebro.addanalyzer(CustomReturns, _name='custom_returns')
+    cerebro.addanalyzer(CustomTradeAnalyzer, _name='custom_trades')
 
     # 加载数据
     data = load_data(data_file)
@@ -61,33 +60,24 @@ def print_analysis(results, num_years, strategy_name, data_name):
 
     # 获取分析结果
     sharpe_ratio = results.analyzers.sharpe.get_analysis().get('sharperatio', 0)
-    drawdown = results.analyzers.drawdown.get_analysis()
-    returns = results.analyzers.returns.get_analysis()
-    trade_analysis = results.analyzers.trades.get_analysis()
-    
-    # 计算年化收益率
-    total_return = returns.get('rtot', 0)
-    annual_return = (np.log(1 + total_return) / num_years) if total_return > -1 else -1
+    custom_drawdown = results.analyzers.custom_drawdown.get_analysis()
+    custom_returns = results.analyzers.custom_returns.get_analysis()
+    trade_analysis = results.analyzers.custom_trades.get_analysis()
 
-    # 计算其他指标
-    total_trades = trade_analysis.get('total', {}).get('total', 0)
-    winning_trades = trade_analysis.get('won', {}).get('total', 0)
-    losing_trades = trade_analysis.get('lost', {}).get('total', 0)
-    win_rate = winning_trades / total_trades if total_trades > 0 else 0
-    try:
-        profit_factor = abs(trade_analysis['won']['pnl']['total'] / trade_analysis['lost']['pnl']['total'])
-    except (KeyError, ZeroDivisionError):
-        profit_factor = float('inf') if winning_trades > 0 else 0
+    max_drawdown = custom_drawdown.get('max', {}).get('drawdown', 0)
+    max_drawdown_money = custom_drawdown.get('max', {}).get('moneydown', 0)
+    max_drawdown_duration = custom_drawdown.get('max', {}).get('len', 0)
 
-    max_drawdown = drawdown.get('max', {}).get('drawdown', 0)
-    max_drawdown_money = drawdown.get('max', {}).get('moneydown', 0)
+    total_return = custom_returns.get('roi', 0)
+    annual_return = custom_returns.get('annualized_roi', 0)
 
-    # 计算最大连续盈利和亏损次数
-    try:
-        max_win_streak = trade_analysis['streak']['won']['longest']
-        max_loss_streak = trade_analysis['streak']['lost']['longest']
-    except KeyError:
-        max_win_streak = max_loss_streak = 0
+    total_trades = trade_analysis.get('total', 0)
+    winning_trades = trade_analysis.get('won', 0)
+    losing_trades = trade_analysis.get('lost', 0)
+    win_rate = trade_analysis.get('win_rate', 0)
+    profit_factor = trade_analysis.get('profit_factor', 0)
+    avg_profit = trade_analysis.get('avg_profit', 0)
+    avg_loss = trade_analysis.get('avg_loss', 0)
 
     # 创建结果字典
     analysis_results = {
@@ -96,15 +86,15 @@ def print_analysis(results, num_years, strategy_name, data_name):
         "总收益率": f"{total_return:.2%}",
         "年化收益率": f"{annual_return:.2%}",
         "最大回撤": f"{max_drawdown:.2%}",
-        "最大回撤金额":f"${max_drawdown_money:.2f}",
+        "最大回撤金额": f"${max_drawdown_money:.2f}",
+        "最大回撤持续期": max_drawdown_duration,
         "总交易次数": total_trades,
         "盈利交易次数": winning_trades,
         "亏损交易次数": losing_trades,
         "交易胜率": f"{win_rate:.2%}",
         "盈亏比": f"{profit_factor:.2f}",
-        "平均交易盈亏": f"${trade_analysis.get('pnl', {}).get('average', 0):.2f}",
-        "最大连续盈利次数": max_win_streak,
-        "最大连续亏损次数": max_loss_streak,
+        "平均盈利": f"${avg_profit:.2f}",
+        "平均亏损": f"${avg_loss:.2f}",
         "夏普比率": f"{sharpe_ratio:.2f}"
     }
 

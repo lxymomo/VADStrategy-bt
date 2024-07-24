@@ -12,17 +12,35 @@ class CustomTradeAnalyzer(bt.Analyzer):
         self.lost = 0
         self.total_profit = 0
         self.total_loss = 0
+        self.current_trade = None
 
-    def notify_trade(self, trade):
-        if trade.isclosed:
-            self.total_trades += 1
-            if trade.pnl > 0:
-                self.won += 1
-                self.total_profit += trade.pnl
+    def notify_order(self, order):
+        if order.status == order.Completed:
+            if not self.current_trade:
+                self.current_trade = {
+                    'entry_price': order.executed.price,
+                    'entry_size': order.executed.size,
+                    'entry_value': order.executed.value,
+                }
             else:
-                self.lost += 1
-                self.total_loss += trade.pnl
-            self.trades.append(trade)
+                exit_value = order.executed.price * order.executed.size
+                profit = exit_value - self.current_trade['entry_value']
+                
+                self.total_trades += 1
+                if profit > 0:
+                    self.won += 1
+                    self.total_profit += profit
+                elif profit < 0:
+                    self.lost += 1
+                    self.total_loss += profit
+                
+                self.trades.append({
+                    'entry_price': self.current_trade['entry_price'],
+                    'exit_price': order.executed.price,
+                    'profit': profit
+                })
+                
+                self.current_trade = None
 
     def get_analysis(self):
         win_rate = self.won / self.total_trades if self.total_trades > 0 else 0
@@ -76,24 +94,33 @@ class CustomDrawDown(bt.Analyzer):
         self.drawdown = 0.0
         self.max_drawdown = 0.0
         self.peak = float('-inf')
+        self.drawdown_start = 0
+        self.drawdown_length = 0
+        self.max_drawdown_length = 0
+        self.current_drawdown_length = 0
 
     def next(self):
-        # 使用策略的 broker 来获取当前的投资组合价值
         value = self.strategy.broker.getvalue()
         
         if value > self.peak:
             self.peak = value
+            self.drawdown_start = len(self.data)
+            self.current_drawdown_length = 0
         else:
             drawdown = (self.peak - value) / self.peak
             self.drawdown = drawdown
-            self.max_drawdown = max(self.max_drawdown, drawdown)
+            self.current_drawdown_length += 1
+            
+            if drawdown > self.max_drawdown:
+                self.max_drawdown = drawdown
+                self.drawdown_length = self.current_drawdown_length
+                self.max_drawdown_length = max(self.max_drawdown_length, self.drawdown_length)
 
     def get_analysis(self):
         return {
             'max': {
                 'drawdown': self.max_drawdown,
-                'moneydown': self.peak * self.max_drawdown
+                'moneydown': self.peak * self.max_drawdown,
+                'len': self.max_drawdown_length
             }
         }
-
-

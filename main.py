@@ -29,7 +29,7 @@ def run_strategy(data_file, strategy_name, strategy_params):
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
     cerebro.addanalyzer(CustomDrawDown, _name='custom_drawdown')
     cerebro.addanalyzer(CustomReturns, _name='custom_returns')
-    cerebro.addanalyzer(CustomTradeAnalyzer, _name='custom_trades')
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='custom_trades')
 
     # 加载数据
     data = load_data(data_file)
@@ -71,13 +71,19 @@ def print_analysis(results, num_years, strategy_name, data_name):
     total_return = custom_returns.get('roi', 0)
     annual_return = custom_returns.get('annualized_roi', 0)
 
-    total_trades = trade_analysis.get('total', 0)
-    winning_trades = trade_analysis.get('won', 0)
-    losing_trades = trade_analysis.get('lost', 0)
-    win_rate = trade_analysis.get('win_rate', 0)
-    profit_factor = trade_analysis.get('profit_factor', 0)
-    avg_profit = trade_analysis.get('avg_profit', 0)
-    avg_loss = trade_analysis.get('avg_loss', 0)
+    total_trades = trade_analysis.get('total', {}).get('total', 0)
+    winning_trades = trade_analysis.get('won', {}).get('total', 0)
+    
+    if total_trades > 0:
+        win_rate = winning_trades / total_trades
+    else:
+        win_rate = 0
+
+    total_won = trade_analysis.get('won', {}).get('pnl', {}).get('total', 0)
+
+    avg_profit = trade_analysis.get('won', {}).get('pnl', {}).get('average', 0)
+    avg_loss = abs(trade_analysis.get('lost', {}).get('pnl', {}).get('average', 0))
+
 
     # 创建结果字典
     analysis_results = {
@@ -90,9 +96,7 @@ def print_analysis(results, num_years, strategy_name, data_name):
         "最大回撤持续期": max_drawdown_duration,
         "总交易次数": total_trades,
         "盈利交易次数": winning_trades,
-        "亏损交易次数": losing_trades,
         "交易胜率": f"{win_rate:.2%}",
-        "盈亏比": f"{profit_factor:.2f}",
         "平均盈利": f"${avg_profit:.2f}",
         "平均亏损": f"${avg_loss:.2f}",
         "夏普比率": f"{sharpe_ratio:.2f}"

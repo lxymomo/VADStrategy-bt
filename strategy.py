@@ -102,20 +102,22 @@ class VADStrategy(bt.Strategy):
         self.trade_recorder = TradeRecorder(self)
         self.processed_orders = set()  # 新增：用于跟踪已处理的订单
         self.first_order_amount = None # 新增：用于跟踪base_order_amount（考虑佣金）
+        self.order = None # 用于记录交易
 
     def next(self):
         long_signal = self.data.close < self.vwma - self.p.k * self.atr
         short_signal = self.data.close > self.vwma + self.p.k * self.atr
         commission = CONFIG['commission_rate']
         slippage = CONFIG['slippage'] 
-        close = self.data.close[0] * (1 + slippage)
+        close_buy = self.data.close[0] * (1 + slippage)
+        close_sell = self.data.close[0] * (1 - slippage)
         value = self.broker.getvalue() 
 
         if long_signal and self.addition_count == 0:
             self.first_order_amount = self.p.base_order_amount * (1 - commission)
-            size = int(self.first_order_amount / close)
-            self.buy(size=size)
-            self.last_entry_price = close
+            size = int(self.first_order_amount / close_buy)
+            self.order = self.buy(size=size)
+            self.last_entry_price = close_buy
             self.total_position = size
             self.addition_count = 1
             self.total_amount = self.first_order_amount
@@ -123,9 +125,9 @@ class VADStrategy(bt.Strategy):
         elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < value:
             if self.data.close < self.last_entry_price - self.p.k * self.atr:
                 add_amount = self.first_order_amount * (self.params.dca_multiplier ** self.addition_count) * (1 - commission)
-                size = int(add_amount / close)
-                self.buy(size=size)
-                self.last_entry_price = close
+                size = int(add_amount / close_buy)
+                self.order = self.buy(size=size)
+                self.last_entry_price = close_buy
                 self.addition_count += 1
                 self.total_position += size
                 self.total_amount += add_amount
@@ -134,12 +136,12 @@ class VADStrategy(bt.Strategy):
             self.takeprofit = True
             price_change = self.data.close[0] - self.last_entry_price
             if price_change >= self.total_position * self.atr:
-                self.sell(size=self.total_position)
+                self.order = self.sell(size=self.total_position, price = close_sell)
                 self.reset_position()
                 
             elif price_change <= -self.total_position * self.atr:
                 self.takeprofit = False
-                self.sell(size=self.total_position)
+                self.order = self.sell(size=self.total_position, price = close_sell)
                 self.reset_position()
 
     def reset_position(self):
@@ -165,22 +167,40 @@ class VADStrategy(bt.Strategy):
         return net_profit
 
     def notify_order(self, order):
-        if order.status == order.Completed and order.ref not in self.processed_orders:
-            self.processed_orders.add(order.ref)  # 标记订单为已处理
-            self.trade_count += 1
-            if order.isbuy():
-                if self.addition_count == 1:
-                    print(f'开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
-                else:
-                    print(f'加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
-            elif order.issell():
-                if self.takeprofit:
-                    net_profit = abs(self.calculate_net_profit(order.executed.size))
-                    print(f'止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
-                else:
-                    print(f'止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
-            self.trade_recorder.record() 
+        # 首先通知所有分析器
+        for analyzer in self.analyzers:
+            if hasattr(analyzer, 'notify_order'):
+                analyzer.notify_order(order)
 
+        # 处理订单状态
+        if order.status in [order.Submitted, order.Accepted]:
+            return  # 订单已提交或已接受，无需进一步处理
+
+        if order.status == order.Completed:
+            if order.ref not in self.processed_orders:
+                self.processed_orders.add(order.ref)  # 标记订单为已处理
+                self.trade_count += 1
+                order_time = self.data.datetime.datetime() 
+                if order.isbuy():
+                    if self.addition_count == 1:
+                        print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                    else:
+                        print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                elif order.issell():
+                    try:
+                        net_profit = abs(self.calculate_net_profit(order.executed.size))
+                        if self.takeprofit:
+                            print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
+                        else:
+                            print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
+                    except Exception as e:
+                        print(f"计算净利润时出错: {e}")
+                self.trade_recorder.record()
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            print(f'订单被取消/保证金不足/被拒绝，订单状态: {order.status}')
+
+        self.order = None  # 重置订单
+                
 class BuyAndHoldStrategy(bt.Strategy):
     params = (('timeframe', None),)
 
@@ -221,8 +241,9 @@ class BuyAndHoldStrategy(bt.Strategy):
         if order.status == order.Completed and order.ref not in self.processed_orders:
             self.processed_orders.add(order.ref)
             self.trade_count += 1
+            order_time = self.data.datetime.datetime() 
             if order.isbuy():
-                print(f'买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                print(f'{order_time} 买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                 self.bought = True
             self.order = None
             self.trade_recorder.record()

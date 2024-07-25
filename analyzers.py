@@ -16,13 +16,13 @@ class CustomTradeAnalyzer(bt.Analyzer):
 
     def notify_order(self, order):
         if order.status == order.Completed:
-            if not self.current_trade:
+            if order.isbuy():
                 self.current_trade = {
                     'entry_price': order.executed.price,
                     'entry_size': order.executed.size,
-                    'entry_value': order.executed.value,
+                    'entry_value': order.executed.value
                 }
-            else:
+            elif order.issell() and self.current_trade:
                 exit_value = order.executed.price * order.executed.size
                 profit = exit_value - self.current_trade['entry_value']
                 
@@ -30,7 +30,7 @@ class CustomTradeAnalyzer(bt.Analyzer):
                 if profit > 0:
                     self.won += 1
                     self.total_profit += profit
-                elif profit < 0:
+                else:
                     self.lost += 1
                     self.total_loss += profit
                 

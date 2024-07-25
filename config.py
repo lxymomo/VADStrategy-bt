@@ -17,7 +17,7 @@ CONFIG = {
                     'atr_period': 14
                 },
                 '240min': {
-                    'k': 0.3,
+                    'k': 0.7,
                     'base_order_amount': 10000,
                     'dca_multiplier': 1.5,
                     'max_additions': 4,

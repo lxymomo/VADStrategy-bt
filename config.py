@@ -4,10 +4,13 @@ CONFIG = {
     'initial_cash': 100000,
     'commission_rate': 5 / 10000,
     'slippage': 1 / 1000,
-    'strategies': {
+
+    # ↓ 调整策略适用的、不同时间周期的参数
+    'strategies': {  
         'vad': {
-            'enabled_timeframes': ['5min', '240min'],
-            'params': {
+            # ↓ 准许适用5min, 240min参数，这一步是为了以后能放入更多数据
+            'enabled_timeframes': ['5min', '240min'],  
+            'params': { 
                 '5min': {
                     'k': 1.6,
                     'base_order_amount': 10000,
@@ -32,8 +35,11 @@ CONFIG = {
         }
     },
     'data_files': {
-        'qqq_5min': 'processed/BATS_QQQ_5min.csv',
-        'qqq_240min': 'processed/BATS_QQQ_240min.csv'
+        'qqq_5min': 'processed/BATS_QQQ_5min.csv',   # 数据文件 QQQ 5min
+        'qqq_240min': 'processed/BATS_QQQ_240min.csv' # 数据文件 QQQ 240min
     },
-    'output_dir': 'results/'
+    'output_dir': 'results/', # 输出文件夹位置
+    'visualization': {
+        'data_path': 'results/vad_5min_trades.csv'  # 需要可视化的文件
+    }
 }

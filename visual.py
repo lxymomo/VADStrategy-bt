@@ -1,98 +1,61 @@
 import pandas as pd
-from bokeh.plotting import figure, curdoc
-from bokeh.models import ColumnDataSource, HoverTool, CrosshairTool, WheelZoomTool
-from bokeh.layouts import column
-from bokeh.embed import components
-import dash
-from dash import dcc, html
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from config import CONFIG  # 导入配置
 
-def create_figure(title, x_axis_type="datetime", tools="pan,box_zoom,reset,save,wheel_zoom"):
-    return figure(x_axis_type=x_axis_type, width=1200, height=800, title=title, tools=tools)
-
-def add_equity_curve(p, source):
-    p.line('date', 'equity', line_width=2, color='navy', alpha=0.8, source=source)
-    p.yaxis.axis_label = 'Equity'
-
-def add_candlestick(p, df, source):
-    inc = df.close > df.open
-    dec = df.open > df.close
-    w = 12*60*60*1000  # 半天的宽度（毫秒）
-
-    p.segment('date', 'high', 'date', 'low', color="black", source=source)
-    p.vbar('date', w, 'open', 'close', fill_color="green", line_color="black", source=source, selection_color="green")
-    p.vbar('date', w, 'open', 'close', fill_color="red", line_color="black", source=source, selection_color="red")
-
-def add_signals(p, df):
-    buy_df = df[df['buy_signal']]
-    sell_df = df[df['sell_signal']]
+def visualize_strategy_results():
+    # 从配置中读取数据路径
+    data_path = CONFIG['visualization']['data_path']
     
-    p.scatter('date', 'low', marker='triangle', size=10, color="green", alpha=0.5, source=ColumnDataSource(buy_df))
-    p.scatter('date', 'high', marker='inverted_triangle', size=10, color="red", alpha=0.5, source=ColumnDataSource(sell_df))
+    # 读取数据
+    df = pd.read_csv(data_path)
+    df['datetime'] = pd.to_datetime(df['datetime'])
 
-def add_vwma(p, source):
-    p.line('date', 'vwma', color='blue', alpha=0.5, line_width=2, source=source, legend_label="VWMA")
+    # 创建子图，指定2行1列布局
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        vertical_spacing=0.1, 
+                        row_heights=[0.7, 0.3],
+                        subplot_titles=('Candlestick Chart', 'Equity Curve'))
 
-def add_hover_tool(p, tooltips):
-    hover = HoverTool(tooltips=tooltips, formatters={'@date': 'datetime'}, mode='vline')
-    p.add_tools(hover)
-    return hover
+    # 添加K线图
+    fig.add_trace(go.Candlestick(x=df['datetime'],
+                                 open=df['open'],
+                                 high=df['high'],
+                                 low=df['low'],
+                                 close=df['close'],
+                                 name='Candlestick'),
+                  row=1, col=1)
 
-def add_crosshair_tool(p):
-    crosshair = CrosshairTool()
-    p.add_tools(crosshair)
-    return crosshair
+    # 标记买入点和卖出点
+    buy_signals = df[df['buy_signal'] == 1]
+    sell_signals = df[df['sell_signal'] == 1]
 
-def visualize_strategy_results(df):
-    df['date'] = pd.to_datetime(df['datetime'])
-    source = ColumnDataSource(df)
+    fig.add_trace(go.Scatter(x=buy_signals['datetime'], y=buy_signals['low'], mode='markers',
+                             marker=dict(symbol='triangle-up', size=15, color='lime', line=dict(color='green', width=2)),
+                             name='Buy Signal'), row=1, col=1)
 
-    p = create_figure("Strategy Visualization")
-    add_candlestick(p, df, source)
-    add_signals(p, df)
-    add_vwma(p, source)
-    hover = add_hover_tool(p, [
-        ('Date', '@date{%F}'),
-        ('Open', '@open{0.00}'),
-        ('High', '@high{0.00}'),
-        ('Low', '@low{0.00}'),
-        ('Close', '@close{0.00}'),
-        ('Equity', '@equity{0.00}')
-    ])
+    fig.add_trace(go.Scatter(x=sell_signals['datetime'], y=sell_signals['high'], mode='markers',
+                             marker=dict(symbol='triangle-down', size=15, color='red', line=dict(color='darkred', width=2)),
+                             name='Sell Signal'), row=1, col=1)
 
-    p2 = create_figure("Equity Curve")
-    add_equity_curve(p2, source)
-    p2.add_tools(hover)
+    # 添加equity曲线
+    fig.add_trace(go.Scatter(x=df['datetime'], y=df['equity'], mode='lines', name='Equity', line=dict(color='navy', width=2)),
+                  row=2, col=1)
 
-    crosshair = add_crosshair_tool(p)
-    add_crosshair_tool(p2)
+    # 设置布局和标题
+    fig.update_layout(
+        title='Strategy Visualization',
+        xaxis_title='Datetime',
+        height=800,
+        width=1200,
+        xaxis_rangeslider_visible=False,  # 禁用范围滑动器
+        hovermode='x',  # 设置hover模式为垂直线
+        legend=dict(x=0.01, y=0.99)
+    )
 
-    p.toolbar.active_scroll = WheelZoomTool()
-    p2.toolbar.active_scroll = WheelZoomTool()
+    # 显示图形
+    fig.show()
 
-    return p, p2
-
-# 在 Dash 应用中使用 Bokeh 可视化
-app = dash.Dash(__name__)
-
-df = pd.read_csv('results/vad_5min_trades.csv')
-p, p2 = visualize_strategy_results(df)
-
-# 获取图形的 HTML 和 JavaScript 片段
-script_p, div_p = components(p)
-script_p2, div_p2 = components(p2)
-
-app.layout = html.Div([
-    html.H1("Strategy Visualization"),
-    html.Div([
-        html.Div([html.Div(id='plot1-div', style={'width': '100%', 'height': '600px'})], id='plot1-container'),
-        html.Script(script_p)
-    ]),
-    html.H1("Equity Curve"),
-    html.Div([
-        html.Div([html.Div(id='plot2-div', style={'width': '100%', 'height': '600px'})], id='plot2-container'),
-        html.Script(script_p2)
-    ]),
-])
-
-if __name__ == '__main__':
-    app.run_server(debug=True)
+# 使用示例
+if __name__ == "__main__":
+    visualize_strategy_results()

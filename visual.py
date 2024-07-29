@@ -1,9 +1,10 @@
-# visual.py
-
 import pandas as pd
-from bokeh.plotting import figure, show
-from bokeh.layouts import column
+from bokeh.plotting import figure, curdoc
 from bokeh.models import ColumnDataSource, HoverTool, CrosshairTool, WheelZoomTool
+from bokeh.layouts import column
+from bokeh.embed import components
+import dash
+from dash import dcc, html
 
 def create_figure(title, x_axis_type="datetime", tools="pan,box_zoom,reset,save,wheel_zoom"):
     return figure(x_axis_type=x_axis_type, width=1200, height=800, title=title, tools=tools)
@@ -49,10 +50,6 @@ def visualize_strategy_results(df):
     add_candlestick(p, df, source)
     add_signals(p, df)
     add_vwma(p, source)
-
-    p2 = create_figure("Equity Curve")
-    add_equity_curve(p2, source)
-
     hover = add_hover_tool(p, [
         ('Date', '@date{%F}'),
         ('Open', '@open{0.00}'),
@@ -61,6 +58,9 @@ def visualize_strategy_results(df):
         ('Close', '@close{0.00}'),
         ('Equity', '@equity{0.00}')
     ])
+
+    p2 = create_figure("Equity Curve")
+    add_equity_curve(p2, source)
     p2.add_tools(hover)
 
     crosshair = add_crosshair_tool(p)
@@ -69,10 +69,30 @@ def visualize_strategy_results(df):
     p.toolbar.active_scroll = WheelZoomTool()
     p2.toolbar.active_scroll = WheelZoomTool()
 
+    return p, p2
 
-    show(column(p, p2))
+# 在 Dash 应用中使用 Bokeh 可视化
+app = dash.Dash(__name__)
 
-# 使用示例
-if __name__ == "__main__":
-    df = pd.read_csv('results/vad_5min_trades.csv')
-    visualize_strategy_results(df)
+df = pd.read_csv('results/vad_5min_trades.csv')
+p, p2 = visualize_strategy_results(df)
+
+# 获取图形的 HTML 和 JavaScript 片段
+script_p, div_p = components(p)
+script_p2, div_p2 = components(p2)
+
+app.layout = html.Div([
+    html.H1("Strategy Visualization"),
+    html.Div([
+        html.Div([html.Div(id='plot1-div', style={'width': '100%', 'height': '600px'})], id='plot1-container'),
+        html.Script(script_p)
+    ]),
+    html.H1("Equity Curve"),
+    html.Div([
+        html.Div([html.Div(id='plot2-div', style={'width': '100%', 'height': '600px'})], id='plot2-container'),
+        html.Script(script_p2)
+    ]),
+])
+
+if __name__ == '__main__':
+    app.run_server(debug=True)

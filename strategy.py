@@ -37,6 +37,9 @@ class TradeRecorder:
 
         self.data.append({
             'datetime': self.strategy.data.datetime.datetime(),
+            'open': self.strategy.data.open[0],
+            'high': self.strategy.data.high[0],
+            'low': self.strategy.data.low[0],
             'close': self.strategy.data.close[0],
             'vwma': getattr(self.strategy, 'vwma', [None])[0],
             'atr': getattr(self.strategy, 'atr', [None])[0],

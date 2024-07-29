@@ -45,8 +45,8 @@ class TradeRecorder:
             'atr': getattr(self.strategy, 'atr', [None])[0],
             'position_size': self.strategy.position.size,
             'equity': self.strategy.broker.getvalue(),
-            'buy_signal': self.strategy.buy_signal() if hasattr(self.strategy, 'buy_signal') else None,
-            'sell_signal': self.strategy.sell_signal() if hasattr(self.strategy, 'sell_signal') else None,
+            'buy_signal': self.strategy.buy_signal(),
+            'sell_signal': self.strategy.sell_signal(),
             'trade_count': getattr(self.strategy, 'trade_count', 0),
             'pnl_pct': pnl_pct if initial_value != 0 else None 
         })
@@ -116,6 +116,9 @@ class VADStrategy(bt.Strategy):
         close_sell = self.data.close[0] * (1 - slippage)
         value = self.broker.getvalue() 
 
+        self.buy_signal_flag = False
+        self.sell_signal_flag = False
+
         if long_signal and self.addition_count == 0:
             self.first_order_amount = self.p.base_order_amount * (1 - commission)
             size = int(self.first_order_amount / close_buy)
@@ -124,6 +127,7 @@ class VADStrategy(bt.Strategy):
             self.total_position = size
             self.addition_count = 1
             self.total_amount = self.first_order_amount
+            self.buy_signal_flag = True
             
         elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < value:
             if self.data.close < self.last_entry_price - self.p.k * self.atr:
@@ -134,6 +138,7 @@ class VADStrategy(bt.Strategy):
                 self.addition_count += 1
                 self.total_position += size
                 self.total_amount += add_amount
+                self.buy_signal_flag = True
 
         elif short_signal and self.total_position > 0:
             self.takeprofit = True
@@ -141,11 +146,16 @@ class VADStrategy(bt.Strategy):
             if price_change >= self.total_position * self.atr:
                 self.order = self.sell(size=self.total_position, price = close_sell)
                 self.reset_position()
-                
+                self.sell_signal_flag = True
+
             elif price_change <= -self.total_position * self.atr:
                 self.takeprofit = False
                 self.order = self.sell(size=self.total_position, price = close_sell)
                 self.reset_position()
+                self.sell_signal_flag = True
+
+        # 在每一步都记录数据
+        self.trade_recorder.record()
 
     def reset_position(self):
         self.addition_count = 0
@@ -154,10 +164,10 @@ class VADStrategy(bt.Strategy):
         self.last_entry_price = None
 
     def buy_signal(self):
-        return self.data.close < self.vwma - self.p.k * self.atr
+        return self.buy_signal_flag
 
     def sell_signal(self):
-        return self.data.close > self.vwma + self.p.k * self.atr
+        return self.sell_signal_flag
     
     # 计算盈亏利润
     def calculate_net_profit(self, sell_size):

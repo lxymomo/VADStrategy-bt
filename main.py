@@ -84,27 +84,38 @@ def print_analysis(results, num_years, strategy_name, data_name):
     avg_profit = trade_analysis.get('won', {}).get('pnl', {}).get('average', 0)
     avg_loss = abs(trade_analysis.get('lost', {}).get('pnl', {}).get('average', 0))
 
+    profit_loss_ratio = avg_profit / avg_loss if avg_loss != 0 else None
 
     # 创建结果字典
     analysis_results = {
         "策略": strategy_name,
         "数据": data_name,
-        "总收益率": f"{total_return:.2%}",
-        "年化收益率": f"{annual_return:.2%}",
-        "最大回撤": f"{max_drawdown:.2%}",
-        "最大回撤金额": f"${max_drawdown_money:.2f}",
-        "最大回撤持续期": max_drawdown_duration,
-        "总交易次数": total_trades,
-        "盈利交易次数": winning_trades,
-        "交易胜率": f"{win_rate:.2%}",
-        "平均盈利": f"${avg_profit:.2f}",
-        "平均亏损": f"${avg_loss:.2f}",
-        "夏普比率": f"{sharpe_ratio:.2f}"
+        "重要指标":{
+            "总收益率": f"{total_return:.2%}",
+            "年化收益率": f"{annual_return:.2%}",
+            "最大回撤": f"{max_drawdown:.2%}",
+            "夏普比率": f"{sharpe_ratio:.2f}"
+        },
+        "其他指标":{
+            "年均交易次数":0,
+            "交易胜率": f"{win_rate:.2%}",
+            "盈亏比": "" if None else f"{profit_loss_ratio:.2f}",
+            "最大回撤持续K线根数":max_drawdown_duration,
+            "最大回撤金额": f"${max_drawdown_money:.2f}",
+            "盈利交易的平均持仓K线根数":0
+        }
+
     }
 
     # 打印结果
-    for key, value in analysis_results.items():
-        print(f"{key}: {value}")
+    print("\n重要指标：")
+    for key, value in analysis_results["重要指标"].items():
+        print(f"    {key}: {value}")
+
+    # 打印其他指标
+    print("\n其他指标：")
+    for key, value in analysis_results["其他指标"].items():
+        print(f"    {key}: {value}")
 
     return analysis_results
 

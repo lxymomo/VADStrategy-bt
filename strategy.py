@@ -22,6 +22,24 @@ class VolumeWeightedMovingAverage(bt.Indicator):
 
         self.lines.vwma[0] = total_price_volume / total_volume
 
+    '''
+计算VWMA类
+    定义属性(vwma, 14周期)
+    
+    初始化构造函数
+        确保在计算前，至少有period根数据
+    
+    在每根bar计算
+        总成交量 = 0
+        加权价格 = 0
+
+        遍历最近的period根数据:
+            更新 总成交量 += 总成交量
+            更新 加权价格 = close * 成交量
+
+        vwma = 加权价格 / 总成交量
+    '''
+
 # 记录交易过程中的数据
 class TradeRecorder:
     def __init__(self, strategy):
@@ -36,49 +54,58 @@ class TradeRecorder:
         pnl_pct = (current_value - initial_value) / initial_value * 100 if initial_value != 0 else 0
 
         self.data.append({
-            'datetime': self.strategy.data.datetime.datetime(),
-            'open': self.strategy.data.open[0],
-            'high': self.strategy.data.high[0],
-            'low': self.strategy.data.low[0],
-            'close': self.strategy.data.close[0],
-            'vwma': getattr(self.strategy, 'vwma', None),
-            'atr': getattr(self.strategy, 'atr', None),
-            'position_size': self.strategy.position.size,
-            'equity': current_value,
-            'buy_signal': self.strategy.buy_signal(),
-            'sell_signal': self.strategy.sell_signal(),
-            'trade_count': getattr(self.strategy, 'trade_count', 0),
-            'pnl_pct': pnl_pct
+            '时间': self.strategy.data.datetime.datetime(),
+            '开盘价': self.strategy.data.open[0],
+            '最高价': self.strategy.data.high[0],
+            '最低价': self.strategy.data.low[0],
+            '收盘价': self.strategy.data.close[0],
+            'VWMA': getattr(self.strategy, 'vwma', None),
+            'ATR': getattr(self.strategy, 'atr', None),
+            '持仓': self.strategy.position.size,
+            '资金': current_value,
+            '买入信号': self.strategy.buy_signal(),
+            '卖出信号': self.strategy.sell_signal(),
+            '交易计数': getattr(self.strategy, 'trade_count', 0),
+            '盈亏率': pnl_pct
         })
-
-    def record_trade(self, order):
-        if order.status == order.Completed:
-            if not self.current_trade:
-                self.current_trade = {
-                    'entry_date': self.strategy.data.datetime.datetime(),
-                    'entry_price': order.executed.price,
-                    'size': order.executed.size,
-                    'entry_bar': len(self.data)
-                }
-            else:
-                exit_date = self.strategy.data.datetime.datetime()
-                exit_price = order.executed.price
-                pnl = (exit_price - self.current_trade['entry_price']) * self.current_trade['size'] * (-1 if order.isbuy() else 1)
-                self.trades.append({
-                    'entry_date': self.current_trade['entry_date'],
-                    'exit_date': exit_date,
-                    'entry_price': self.current_trade['entry_price'],
-                    'exit_price': exit_price,
-                    'pnl': pnl,
-                    'bars_held': len(self.data) - self.current_trade['entry_bar']
-                })
-                self.current_trade = None
 
     def get_analysis(self):
         return pd.DataFrame(self.data)
+    
+    '''
+类 TradeRecorder:
+    初始化(策略):
+        设置 self.strategy 为 策略
+        初始化 self.data 为 空列表
+        初始化 self.trades 为 空列表
+        设置 self.current_trade 为 None    
 
-    def get_trades(self):
-        return pd.DataFrame(self.trades)
+    方法 record():
+        当前价值 = self.strategy.broker.getvalue()
+        初始价值 = self.strategy.broker.startingcash
+        如果 利润率 != 0:
+            盈亏率 = (当前价值 - 初始价值) / 初始价值 * 100
+        否则:
+            盈亏率 = 0
+
+        将当前记录添加到 self.data:
+            '时间': 当前时间,
+            '开盘价': 当前开盘价,
+            '最高价,': 当前最高价,
+            '最低价': 当前最低价,
+            '收盘价,': 当前收盘价,
+            'VWMA': 策略的 VWMA,
+            'ATR': 策略的 ATR,
+            '持仓': 当前持仓大小,
+            '资金': 当前价值,
+            '买入信号': 策略的买入信号,
+            '卖出信号': 策略的卖出信号,
+            '交易计数': 策略的交易计数,
+            '盈亏率': 盈亏率
+
+    方法 get_analysis():
+        返回 self.data 转换为 DataFrame
+    '''
     
 class StrategyFactory:
     strategy_map = {
@@ -139,24 +166,26 @@ class VADStrategy(bt.Strategy):
         slippage = CONFIG['slippage'] 
         close_buy = self.data.close[0] * (1 + slippage)
         close_sell = self.data.close[0] * (1 - slippage)
-        value = self.broker.getvalue() 
-
+        value = self.broker.getcash() 
         self.buy_signal_flag = False
         self.sell_signal_flag = False
 
         if long_signal and self.addition_count == 0:
-            self.first_order_amount = self.p.base_order_amount * (1 - commission)
+            self.first_order_amount = self.p.base_order_amount * (1+commission)
             size = int(self.first_order_amount / close_buy)
             self.order = self.buy(size=size)
             self.last_entry_price = close_buy
             self.total_position = size
             self.addition_count = 1
-            self.total_amount = self.first_order_amount
+            self.total_amount = self.first_order_amount # 总投入金额更新
             self.buy_signal_flag = True
-            
-        elif long_signal and self.addition_count < self.p.max_additions and self.total_amount < value:
+            '''
+
+            '''
+
+        elif long_signal and 0 < self.addition_count < self.p.max_additions and self.total_amount < value:
             if self.data.close < self.last_entry_price - self.p.k * self.atr:
-                add_amount = self.first_order_amount * (self.params.dca_multiplier ** self.addition_count) * (1 - commission)
+                add_amount = self.first_order_amount * (self.params.dca_multiplier ** self.addition_count) * (1+commission)
                 size = int(add_amount / close_buy)
                 self.order = self.buy(size=size)
                 self.last_entry_price = close_buy
@@ -164,6 +193,10 @@ class VADStrategy(bt.Strategy):
                 self.total_position += size
                 self.total_amount += add_amount
                 self.buy_signal_flag = True
+                
+                '''
+
+                '''
 
         elif short_signal and self.total_position > 0:
             self.takeprofit = True
@@ -179,14 +212,71 @@ class VADStrategy(bt.Strategy):
                 self.reset_position()
                 self.sell_signal_flag = True
 
-        # 在每一步都记录数据
         self.trade_recorder.record()
 
+        '''
+    方法 每根bar执行：
+        long信号 = close < vwma - k*atr
+        short信号 = close > vwma + k*atr
+        佣金 = config设置
+        滑点 = config设置
+        买入价 = close * (1+滑点)
+        卖出价 = close * (1-滑点)
+        value = 总现金
+        买入标记 = False
+        卖出标记 = False
+
+        if long信号且还未加仓，则开仓：
+            首次花费金额 = 设定花费金额 * （1+佣金）
+            交易量 = 首次花费金额 / 滑点调整后的close，向下取整
+            根据算出的交易量进行买卖
+            （更新数据）
+            更新 最新买入价 = 滑点调整后的close
+            更新 总仓位 = 交易量
+            更新 加仓次数
+            更新 总投入金额
+            更新 买入信号标志 = True
+
+        elif 如果有long信号 且 0<开仓次数<最大开仓 且 总投入金额<当前总现金，则加仓：
+            if close < 最新买入价 - k * atr,
+            加仓金额 = 首次花费金额 * ( dca倍数 ** 加仓次数) * (1+佣金)
+            交易量 = 加仓金额 / 滑点调整后的close，向下取整
+            根据算出的交易量进行买卖
+            （更新数据）
+            更新 最新买入价 = 滑点调整后的close
+            更新 加仓次数
+            更新 总仓位 = 交易量 + 当前仓位
+            更新 总投入金额 = 当前投入金额 + 加仓金额
+            更新 买入信号标志 = True
+
+        elif 如果有short信号 且 当前有仓位，则平仓：
+            止盈 = True
+            价格变化 = close - 上次买入价
+
+            if 价格变化 >总仓位 * atr:
+                平仓，价格 = 滑点调整后的价格
+                重置数据()
+                更新 卖出信号标志 = True
+            
+            elif 价格变化 <= -总仓位 * atr:
+                止盈 = False
+                平仓，价格 = 滑点调整后的价格
+                重置数据()
+                更新 卖出信号标志 = True
+
+        记录数据()
+
+        '''
+    
     def reset_position(self):
         self.addition_count = 0
         self.total_position = 0
         self.total_amount = 0
         self.last_entry_price = None
+
+        '''
+
+        '''
 
     def buy_signal(self):
         return self.buy_signal_flag
@@ -194,67 +284,119 @@ class VADStrategy(bt.Strategy):
     def sell_signal(self):
         return self.sell_signal_flag
     
-    # 计算盈亏利润
     def calculate_net_profit(self, sell_size):
         avg_buy_price = self.total_amount / self.total_position if self.total_position > 0 else 0
         sell_price = self.data.close[0] * (1 - CONFIG['slippage'])
         sell_amount = sell_size * sell_price * (1 - CONFIG['commission_rate'])
         buy_cost = sell_size * avg_buy_price
         net_profit = sell_amount - buy_cost
+
+        '''
+    方法 重置数据():
+        清空 加仓次数
+        清空 总仓位
+        清空 总投入金额
+        清空 上次买入价
+
+    方法 买入信号():
+        返回 卖出买入标志
+
+    方法 卖出信号():
+        返回 卖出信号标志
+        
+    方法 计算利润():
+        if总仓位>0, 平均买入价=总投入金额 / 总仓位 else 平均买入价=0
+        卖出价格 = 滑点调整后的close
+        卖出金额 = 卖出仓位 * 卖出价格 * (1-佣金)
+        买入成本 = 仓位 * 均价
+        净利润 = 卖出价格 - 买入成本
+        
+        返回 净利润
+        '''        
         
         return net_profit
 
     def notify_order(self, order):
-        # 首先通知所有分析器
         for analyzer in self.analyzers:
             if hasattr(analyzer, 'notify_order'):
                 analyzer.notify_order(order)
 
-        # 处理订单状态
         if order.status in [order.Submitted, order.Accepted]:
-            return  # 订单已提交或已接受，无需进一步处理
+            return  
 
-        if order.status == order.Completed:
-            if order.ref not in self.processed_orders:
-                self.processed_orders.add(order.ref)  # 标记订单为已处理
-                self.trade_count += 1
-                order_time = self.data.datetime.datetime() 
+        if order.status == order.Completed and order.ref not in self.processed_orders:
+            self.processed_orders.add(order.ref)
+            self.trade_count += 1
+            order_time = self.data.datetime.datetime() 
 
-                if order.isbuy():
-                    if self.addition_count == 1:
-                        print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+            if order.isbuy():
+                if self.addition_count == 1:
+                    print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                else:
+                    print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                    
+            elif order.issell():
+                try:
+                    net_profit = abs(self.calculate_net_profit(order.executed.size))
+                    if self.takeprofit:
+                        print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
                     else:
-                        print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
-                        
-                elif order.issell():
-                    try:
-                        net_profit = abs(self.calculate_net_profit(order.executed.size))
-                        if self.takeprofit:
-                            print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
-                        else:
-                            print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
-                    except Exception as e:
-                        print(f"计算净利润时出错: {e}")
-                self.trade_recorder.record()
+                        print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
+                except Exception as e:
+                    print(f"计算净利润时出错: {e}")
+            self.trade_recorder.record()
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             print(f'订单被取消/保证金不足/被拒绝，订单状态: {order.status}')
 
         self.order = None  # 重置订单
-                
+
+        '''
+        遍历所有的analyzer
+            if 分析器有 notify_order方法
+            将当前订单信息，传递给所有分析器进行处理
+
+        if 订单状态已提交或接受，不处理
+
+        if 订单状态已完成 且 订单标识 不在 已处理订单
+            标记订单处理
+            交易次数 += 1
+            订单时间= 当前时间
+
+                if 订单是买入
+                    if 加仓次数 == 1:
+                        print 开仓信息
+                    else: 
+                        print 加仓信息
+
+                elif 订单是卖出
+                    try:
+                        净利润 = 计算出的利润
+                        if 止盈
+                            print 止盈信息
+                        else:
+                            pinrt 止损信息
+                    except 有错误
+                        print 错误信息
+                记录()
+
+        elif 订单状态有问题
+            print 有问题的状态
+        '''
+
 class BuyAndHoldStrategy(bt.Strategy):
     params = (('timeframe', None),)
 
     def __init__(self):
         if self.p.timeframe not in CONFIG['strategies']['buyandhold']['enabled_timeframes']:
-            raise ValueError(f"Unsupported timeframe: {self.p.timeframe}")
+            raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
         
         self.order = None
         self.bought = False
         self.trade_count = 0
         self.trade_recorder = TradeRecorder(self)
-        self.processed_orders = set()  # 新增：用于跟踪已处理的订单
-        self.first_bar = True # 新增：第一根bar检查
+        self.processed_orders = set()
+        self.first_bar = True
 
     def next(self):
         cash = self.broker.getcash()
@@ -276,6 +418,10 @@ class BuyAndHoldStrategy(bt.Strategy):
         self.trade_recorder.record()
 
     def notify_order(self, order):
+        for analyzer in self.analyzers:
+            if hasattr(analyzer, 'notify_order'):
+                analyzer.notify_order(order)
+
         if order.status in [order.Submitted, order.Accepted]:
             return
 
@@ -283,18 +429,83 @@ class BuyAndHoldStrategy(bt.Strategy):
             self.processed_orders.add(order.ref)
             self.trade_count += 1
             order_time = self.data.datetime.datetime() 
+
             if order.isbuy():
                 print(f'{order_time} 买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                 self.bought = True
             self.order = None
             self.trade_recorder.record()
+
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             print(f'订单失败。状态: {order.status}')
             self.bought = False
             self.order = None
+
+        '''
+类 Buyandhold策略
+    参数 timeframe
+
+    初始化构造函数
+        if timeframe不在准许的timeframe:
+            警告
+        
+        交易 = 无
+        买入 = 无
+        交易次数 = 0
+        交易记录 = TradeRecorder()
+        已完成订单 = set()
+        第一根bar = True
+
+    方法 next():
+        cash = 当前现金
+        滑点 = config设置
+        佣金 = config设置
+        滑点调整后价格 = close * (1+滑点)
+
+        if 有一根bar 且 尚未买入 且 尚未交易:
+            交易量 = 现金*(1-佣金) / 滑点调整后价格
+            向下取整
+
+            if 交易量>0:
+                买入
+                print 买入信息
+            else:
+                print 无法买入信息
+            
+        第一根bar = False
+        记录数据()
+
+    方法 notify_order()
+        遍历所有的analyzer
+            if 分析器有 notify_order方法
+            将当前订单信息，传递给所有分析器进行处理
+
+        if 订单状态已提交或接受，不处理
+
+        if 订单状态已完成 且 订单标识 不在 已处理订单:
+            标记订单处理
+            交易次数 += 1
+            订单时间= 当前时间
+
+            if 订单是买入：
+                print 买入信息
+                已有买入
+            无挂单
+            记录数据()
+
+        elif 订单状态有问题
+            print 有问题的状态
+
+    方法 buy_signal():
+        返回  无仓位 and 第一根bar，返回True（只在第一根bar买入）
+
+    方法 sell_signal():
+        返回 false（不发出卖出信号）
+        '''
 
     def buy_signal(self):
         return not self.position and self.first_bar
 
     def sell_signal(self):
         return False
+    

@@ -24,12 +24,12 @@ class VolumeWeightedMovingAverage(bt.Indicator):
 
 # 记录交易过程中的数据
 class TradeRecorder:
-    # 初始化时接收一个策略对象，并存储记录
     def __init__(self, strategy):
         self.strategy = strategy
         self.data = []
+        self.trades = []
+        self.current_trade = None
 
-    # 这个方法记录每个时间点的交易数据
     def record(self):
         current_value = self.strategy.broker.getvalue()
         initial_value = self.strategy.broker.startingcash
@@ -41,19 +41,44 @@ class TradeRecorder:
             'high': self.strategy.data.high[0],
             'low': self.strategy.data.low[0],
             'close': self.strategy.data.close[0],
-            'vwma': getattr(self.strategy, 'vwma', [None])[0],
-            'atr': getattr(self.strategy, 'atr', [None])[0],
+            'vwma': getattr(self.strategy, 'vwma', None),
+            'atr': getattr(self.strategy, 'atr', None),
             'position_size': self.strategy.position.size,
-            'equity': self.strategy.broker.getvalue(),
+            'equity': current_value,
             'buy_signal': self.strategy.buy_signal(),
             'sell_signal': self.strategy.sell_signal(),
             'trade_count': getattr(self.strategy, 'trade_count', 0),
-            'pnl_pct': pnl_pct if initial_value != 0 else None 
+            'pnl_pct': pnl_pct
         })
 
-    # 将记录的数据转换为pandas DataFrame格式
+    def record_trade(self, order):
+        if order.status == order.Completed:
+            if not self.current_trade:
+                self.current_trade = {
+                    'entry_date': self.strategy.data.datetime.datetime(),
+                    'entry_price': order.executed.price,
+                    'size': order.executed.size,
+                    'entry_bar': len(self.data)
+                }
+            else:
+                exit_date = self.strategy.data.datetime.datetime()
+                exit_price = order.executed.price
+                pnl = (exit_price - self.current_trade['entry_price']) * self.current_trade['size'] * (-1 if order.isbuy() else 1)
+                self.trades.append({
+                    'entry_date': self.current_trade['entry_date'],
+                    'exit_date': exit_date,
+                    'entry_price': self.current_trade['entry_price'],
+                    'exit_price': exit_price,
+                    'pnl': pnl,
+                    'bars_held': len(self.data) - self.current_trade['entry_bar']
+                })
+                self.current_trade = None
+
     def get_analysis(self):
         return pd.DataFrame(self.data)
+
+    def get_trades(self):
+        return pd.DataFrame(self.trades)
     
 class StrategyFactory:
     strategy_map = {
@@ -194,11 +219,13 @@ class VADStrategy(bt.Strategy):
                 self.processed_orders.add(order.ref)  # 标记订单为已处理
                 self.trade_count += 1
                 order_time = self.data.datetime.datetime() 
+
                 if order.isbuy():
                     if self.addition_count == 1:
                         print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                     else:
                         print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                        
                 elif order.issell():
                     try:
                         net_profit = abs(self.calculate_net_profit(order.executed.size))
@@ -209,6 +236,7 @@ class VADStrategy(bt.Strategy):
                     except Exception as e:
                         print(f"计算净利润时出错: {e}")
                 self.trade_recorder.record()
+
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             print(f'订单被取消/保证金不足/被拒绝，订单状态: {order.status}')
 

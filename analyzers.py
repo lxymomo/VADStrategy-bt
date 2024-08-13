@@ -64,7 +64,7 @@ class CustomTradeAnalyzer(bt.Analyzer):
 
 # 计算收益
 class CustomReturns(bt.Analyzer):
-    params = (('timeframe', bt.TimeFrame.Days),)
+    params = (('timeframe', bt.TimeFrame.Days), ('num_years', 1.0),)  # 添加num_years参数
 
     def start(self):
         self.start_value = self.strategy.broker.getvalue()
@@ -78,7 +78,7 @@ class CustomReturns(bt.Analyzer):
 
     def stop(self):
         self.roi = (self.current_value / self.start_value) - 1.0
-        self.annualized_roi = math.pow(1.0 + self.roi, 252.0 / len(self.returns)) - 1.0
+        self.annualized_roi = math.pow(1.0 + self.roi, 1 / self.params.num_years) - 1.0  # 使用实际的交易年数
 
     def get_analysis(self):
         return {

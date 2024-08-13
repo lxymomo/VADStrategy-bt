@@ -25,24 +25,24 @@ def run_strategy(data_file, strategy_name, strategy_params):
     # 设置初始现金、佣金率、滑点
     cerebro.broker.setcash(CONFIG['initial_cash'])
 
-    # 添加分析器
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-    cerebro.addanalyzer(CustomDrawDown, _name='custom_drawdown')
-    cerebro.addanalyzer(CustomReturns, _name='custom_returns')
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='custom_trades')
-
     # 加载数据
     data = load_data(data_file)
     start_date = data.index[0].date()
     end_date = data.index[-1].date()
     num_years = (end_date - start_date).days / 365.25
     print(f"交易年数: {num_years:.2f}")
+
+    # 添加分析器
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+    cerebro.addanalyzer(CustomDrawDown, _name='custom_drawdown')
+    cerebro.addanalyzer(CustomReturns, _name='custom_returns', num_years=num_years)
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='custom_trades')
     
     data_feed = bt.feeds.PandasData(dataname=data)
     cerebro.adddata(data_feed)
 
     # 加载参数和策略
-    timeframe = '5min' if '5min' in data_file else '240min'
+    timeframe = data_file.split('_')[-1].replace('.csv', '')
     strategy_class = StrategyFactory.get_strategy(strategy_name)
     cerebro.addstrategy(strategy_class, timeframe=timeframe, **strategy_params)
 
@@ -99,7 +99,7 @@ def print_analysis(results, num_years, strategy_name, data_name):
         "其他指标":{
             "年均交易次数":0,
             "交易胜率": f"{win_rate:.2%}",
-            "盈亏比": "" if None else f"{profit_loss_ratio:.2f}",
+            "盈亏比": f"{profit_loss_ratio:.2f}" if profit_loss_ratio is not None else "",
             "最大回撤持续K线根数":max_drawdown_duration,
             "最大回撤金额": f"${max_drawdown_money:.2f}",
             "盈利交易的平均持仓K线根数":0

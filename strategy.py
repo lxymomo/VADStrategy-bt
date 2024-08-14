@@ -121,6 +121,22 @@ class StrategyFactory:
         
         module = __import__('strategy', fromlist=[strategy_class_name])
         return getattr(module, strategy_class_name)
+    
+    '''
+类 策略工厂（用于增减策略）
+    策略映射 = {
+        vad: vad策略类
+        bnh：bnh策略类    
+    }    
+
+    静态方法 获取策略（策略名称，**额外参数）
+        策略类名称 = 从策略映射中获取
+        if 策略名称 不存在：
+        抛出错误
+    
+        策略模块 = 从 strategy 导入
+        返回 从strategy中返回对应名称的类
+    '''
 
 class VADStrategy(bt.Strategy):
     params = (

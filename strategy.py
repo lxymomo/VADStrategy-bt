@@ -77,7 +77,6 @@ class TradeRecorder:
         if self.strategy.order:  # 检查当前是否有订单
             self.record(self.strategy.order)
 
-    
     '''
 类 TradeRecorder:
     初始化(策略):

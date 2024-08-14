@@ -5,151 +5,96 @@ import math
 
 # 计算交易
 class CustomTradeAnalyzer(bt.Analyzer):
-    # 初始化
-    def __init__(self, num_years=None):
+    params = (
+        ('num_years', 1.0),
+    )
+
+    def start(self):
         self.trades = []
         self.total_trades = 0
-        self.won = 0
-        self.lost = 0
+        self.winning_trades = 0
         self.total_profit = 0
         self.total_loss = 0
-        self.current_trade = None
-        self.equity_curve = []
-        self.num_years = num_years
+        self.winning_trade_bars = 0
 
-    # 记录数据
-    def notify_order(self, order):
-
-        # 如果订单完成，将当前净值添加到资金曲线中
-        if order.status == order.Completed:
-            self.equity_curve.append(self.strategy.broker.getvalue())
-
-            # 如果是开仓
-            if not self.current_trade and order.isbuy():
-                self.current_trade = {
-                    'entry_price': order.executed.price,
-                    'size': order.executed.size,
-                    'value': order.executed.value,
-                    'entry_date': self.strategy.data.datetime.datetime(),
-                    'entry_bar': len(self.equity_curve)  # 记录进入交易时的K线索引
-                }
-
-            # 如果是加仓
-            elif self.current_trade and order.isbuy():
-                total_size = self.current_trade['size'] + order.executed.size
-                total_value = self.current_trade['value'] + order.executed.value
-                self.current_trade['entry_price'] = total_value / total_size
-                self.current_trade['size'] = total_size
-                self.current_trade['value'] = total_value
-
-            # 如果是平仓，记录价值，利润和亏损
-            elif order.issell():
-                exit_value = order.executed.price * order.executed.size
-                entry_value = self.current_trade['entry_price'] * order.executed.size
-                profit = exit_value - entry_value
-
-                # 更新交易统计数据：总交易数量、盈亏交易数量、盈亏
-                self.total_trades += 1
-                if profit > 0:
-                    self.won += 1
-                    self.total_profit += profit
-                else:
-                    self.lost += 1
-                    self.total_loss += abs(profit)
-
-                # 更新交易字典
-                self.trades.append({
-                    'entry_price': self.current_trade['entry_price'],
-                    'exit_price': order.executed.price,
-                    'profit': profit,
-                    'size': order.executed.size,
-                    'bars_held': len(self.equity_curve) - self.current_trade['entry_bar']  # 使用 entry_bar 计算持有K线数
-                })
-
-                # 更新剩余仓位
-                self.current_trade['size'] -= order.executed.size
-                self.current_trade['value'] -= entry_value
-                if self.current_trade['size'] <= 0:
-                    self.current_trade = None  # 平仓后将current_trade设置为None
-
-    def calculate_max_drawdown(self):
-        peak = self.equity_curve[0]
-        max_drawdown = 0
-        drawdown_duration = 0
-        max_drawdown_duration = 0
-        for value in self.equity_curve:
-            if value > peak:
-                peak = value
-                drawdown_duration = 0
+    def notify_trade(self, trade):
+        if trade.isclosed:
+            self.total_trades += 1
+            
+            if trade.pnl > 0:
+                self.winning_trades += 1
+                self.total_profit += trade.pnl
+                self.winning_trade_bars += trade.barlen
             else:
-                drawdown = (peak - value) / peak
-                max_drawdown = max(max_drawdown, drawdown)
-                drawdown_duration += 1
-                max_drawdown_duration = max(max_drawdown_duration, drawdown_duration)
-        return max_drawdown, max_drawdown_duration
+                self.total_loss -= trade.pnl  # 注意：亏损的trade.pnl是负数
+
+            self.trades.append(trade)
+
+    def stop(self):
+        self.annual_trade_count = self.total_trades / self.p.num_years
+        self.win_rate = self.winning_trades / self.total_trades if self.total_trades > 0 else 0
+        self.profit_factor = self.total_profit / self.total_loss if self.total_loss != 0 else float('inf')
+        self.avg_winning_trade_bars = self.winning_trade_bars / self.winning_trades if self.winning_trades > 0 else 0
 
     def get_analysis(self):
-        total_trades = self.won + self.lost
-        win_rate = self.won / total_trades if total_trades > 0 else 0
-        loss_rate = self.lost / total_trades if total_trades > 0 else 0
-        avg_profit = self.total_profit / self.won if self.won > 0 else 0
-        avg_loss = self.total_loss / self.lost if self.lost > 0 else 0
-        profit_factor = self.total_profit / self.total_loss if self.total_loss != 0 else float('inf')
-        num_years = self.num_years if self.num_years else 1
-        total_return = self.strategy.broker.getvalue() / self.strategy.broker.startingcash - 1
-        annual_return = (1 + total_return) ** (1 / num_years) - 1
-        max_drawdown, max_drawdown_duration = self.calculate_max_drawdown()
-
         return {
-            '总交易次数': total_trades,
-            '盈利次数': self.won,
-            '亏损次数': self.lost,
-            '交易胜率': f"{win_rate:.2%}",
-            '亏损比率': f"{loss_rate:.2%}",
-            '平均盈利': avg_profit,
-            '平均亏损': -avg_loss,
-            '盈亏比': profit_factor,
-            '总利润': self.total_profit,
-            '总亏损': -self.total_loss,
-            '总收益': total_return,
-            '年化收益': annual_return,
-            '最大回撤': max_drawdown,
-            '最长回撤期': max_drawdown_duration,
+            'total_trades': self.total_trades,
+            'winning_trades': self.winning_trades,
+            'annual_trade_count': self.annual_trade_count,
+            'win_rate': self.win_rate,
+            'total_profit': self.total_profit,
+            'total_loss': self.total_loss,
+            'profit_factor': self.profit_factor,
+            'winning_trade_bars': self.winning_trade_bars,
+            'avg_winning_trade_bars': self.avg_winning_trade_bars,
+            'num_years': self.p.num_years,
         }
-
+    
 '''
-类 自定义交易分析器:
-    方法 初始化(交易年数):
-        初始化交易记录、统计数据和资金曲线
-        记录交易年数
+类 自定义交易分析器(CustomTradeAnalyzer):
+    参数:
+        num_years: 1.0
 
-    方法 订单通知(订单):
-        如果 订单已完成:
-            更新资金曲线
+    方法 开始(start):
+        初始化 交易列表(trades)为空
+        初始化 总交易数(total_trades)为0
+        初始化 赢利交易数(winning_trades)为0
+        初始化 总利润(total_profit)为0
+        初始化 总亏损(total_loss)为0
+        初始化 赢利交易的条数(winning_trade_bars)为0
 
-            如果 是开仓订单:
-                记录当前交易信息(入场价格、数量、价值、日期、入场K线索引)
-
-            否则如果 是加仓订单:
-                更新当前交易信息(平均入场价格、总数量、总价值)
+    方法 通知交易(notify_trade, trade):
+        如果 交易闭合(trade.isclosed):
+            总交易数增加1
             
-            否则如果 是平仓订单:
-                计算退出价值、入场价值和利润
-                更新交易统计(总次数、盈亏次数、总盈亏)
-                记录完整交易信息(入场价格,出场价格,盈亏,仓位,出场K线索引)
-                更新剩余仓位
-                如果 完全平仓:
-                    重置当前交易为空
+            如果 交易利润大于0(trade.pnl > 0):
+                赢利交易数增加1
+                总利润增加交易利润(trade.pnl)
+                赢利交易的条数增加交易的条数(trade.barlen)
+            否则:
+                总亏损减少交易利润(-trade.pnl)  # 亏损的交易利润是负数
 
-    方法 计算最大回撤():
-        遍历资金曲线，计算最大回撤百分比和最长回撤期
-        返回最大回撤和最长回撤期
+            将当前交易添加到交易列表(trades)
 
-    方法 获取分析结果():
-        计算各项交易统计指标
-        返回包含所有分析结果的字典
-            总交易次数、盈亏次数、胜率、亏损率、平均盈利、平均亏损、盈亏比
-            总利润、总亏损、总收益率、年化收益率、最大回撤、最长回撤期
+    方法 停止(stop):
+        年度交易数量(annual_trade_count) = 总交易数 / 年数
+        胜率(win_rate) = 赢利交易数 / 总交易数 如果 总交易数 > 0 否则 0
+        利润因子(profit_factor) = 总利润 / 总亏损 如果 总亏损 != 0 否则 无限大(float('inf'))
+        平均赢利交易条数(avg_winning_trade_bars) = 赢利交易的条数 / 赢利交易数 如果 赢利交易数 > 0 否则 0
+
+    方法 获取分析结果(get_analysis):
+        返回 {
+            '总交易数': 总交易数,
+            '赢利交易数': 赢利交易数,
+            '年度交易数量': 年度交易数量,
+            '胜率': 胜率,
+            '总利润': 总利润,
+            '总亏损': 总亏损,
+            '利润因子': 利润因子,
+            '赢利交易条数': 赢利交易的条数,
+            '平均赢利交易条数': 平均赢利交易条数,
+            '年数': 年数,
+        }
 '''    
 # 计算收益
 class CustomReturns(bt.Analyzer):

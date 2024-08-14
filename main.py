@@ -22,7 +22,7 @@ def ensure_dir(file_path):
 
 def load_data(file_path):
     data = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
-    print(data.head())
+    # print(data.head())
     return data
 
 '''
@@ -105,27 +105,18 @@ def print_analysis(results, num_years, strategy_name, data_name):
     custom_returns = results.analyzers.custom_returns.get_analysis()
     custom_trade_analysis = results.analyzers.custom_trades.get_analysis()
 
-    # 最大回撤
-    max_drawdown = custom_drawdown.get('max', {}).get('drawdown', 0)
-    max_drawdown_money = custom_drawdown.get('max', {}).get('moneydown', 0)
-    max_drawdown_duration = custom_drawdown.get('max', {}).get('len', 0)
-
-    # 收益率
+    # 从分析器获取数据
+    # 重要指标
     total_return = custom_returns.get('roi', 0)
     annual_return = custom_returns.get('annualized_roi', 0)
+    max_drawdown = custom_drawdown.get('max', {}).get('drawdown', 0)
 
-    # 交易胜率
-    total_trades = custom_trade_analysis.get('total_trades', 0)
-    winning_trades = custom_trade_analysis.get('won', 0)
-    win_rate_str = f"{winning_trades}:{total_trades}" if total_trades > 0 else "0:0"
-
-    # 盈亏比
-    total_profit = custom_trade_analysis.get('total_profit', 0)
-    total_loss = custom_trade_analysis.get('total_loss', 0)
-    profit_factor = total_profit / total_loss if total_loss != 0 else float('inf')
-
-    # 计算年均交易次数
-    annual_trade_count = total_trades / num_years if num_years > 0 else 0
+    # 其他指标
+    annual_trade_count = custom_trade_analysis.get('annual_trade_count',0)
+    win_rate = custom_trade_analysis.get('win_rate',0)
+    profit_factor = custom_trade_analysis.get('profit_factor',0)
+    max_drawdown_duration = custom_drawdown.get('max', {}).get('len', 0)
+    avg_winning_trade_bars = custom_trade_analysis.get('avg_winning_trade_bars', 0)
 
     # 创建结果字典
     analysis_results = {
@@ -138,13 +129,11 @@ def print_analysis(results, num_years, strategy_name, data_name):
             "夏普比率": f"{sharpe_ratio:.2f}"
         },
         "其他指标":{
-            "年均交易次数": round(annual_trade_count, 2),
-            "交易胜率": win_rate_str,
-            "盈亏比": round(profit_factor, 2),
+            "年均交易次数": annual_trade_count,
+            "胜率": win_rate,
+            "盈亏比": profit_factor,
             "最大回撤持续K线根数": max_drawdown_duration,
-            "最大回撤金额": f"${max_drawdown_money:.2f}",
-            "平均盈利": round(total_profit / winning_trades, 2) if winning_trades > 0 else 0,
-            "平均亏损": round(total_loss / (total_trades - winning_trades), 2) if (total_trades - winning_trades) > 0 else 0
+            "盈利交易的平均持仓K线根数": avg_winning_trade_bars
         }
     }
 
@@ -168,22 +157,7 @@ def print_analysis(results, num_years, strategy_name, data_name):
     收益分析 = results中的自定义收益分析
     交易分析 = results中的自定义交易分析
 
-    max_drawdown = 从自定义回撤分析中获取最大回撤百分比
-    max_drawdown_money = 从自定义回撤分析中获取最大回撤金额
-    max_drawdown_duration = 从自定义回撤分析中获取最大回撤持续期
-
-    total_return = 从自定义收益分析中获取总收益率
-    annual_return = 从自定义收益分析中获取年化收益率
-
-    total_trades = 从自定义交易分析中获取总交易次数
-    winning_trades = 从自定义交易分析中获取盈利交易次数
-    win_rate_str = 如果有交易则为 "盈利次数:总次数"，否则为 "0:0"
-
-    total_profit = 从自定义交易分析中获取总盈利
-    total_loss = 从自定义交易分析中获取总亏损
-    profit_factor = 如果有亏损则为 总盈利/总亏损，否则为无穷大
-
-    annual_trade_count = 如果有交易年数则为 总交易次数/交易年数，否则为 0
+    从自定义分析器中获取对应信息
 
     analysis_results = {
         "策略": 策略名称,
@@ -238,7 +212,7 @@ def main():
             output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades.csv"
             ensure_dir(output_file)
             df.to_csv(output_file)
-            print(f"交易记录已保存到: {output_file}")
+            print(f"\n交易记录已保存到: {output_file}")
 
     # 合并结果数据，调整顺序
     all_results_df = pd.DataFrame(all_results)

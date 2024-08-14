@@ -45,66 +45,72 @@ class TradeRecorder:
     def __init__(self, strategy):
         self.strategy = strategy
         self.data = []
-        self.trades = []
         self.current_trade = None
 
-    def record(self):
-        current_value = self.strategy.broker.getvalue()
-        initial_value = self.strategy.broker.startingcash
-        pnl_pct = (current_value - initial_value) / initial_value * 100 if initial_value != 0 else 0
+    def record(self, order):
+        # 检查订单状态并记录
+        if order.status == order.Completed:
+            current_value = self.strategy.broker.getvalue()
+            initial_value = self.strategy.broker.startingcash
+            pnl = current_value - initial_value
+            net_value = current_value / initial_value if initial_value != 0 else 0
 
-        self.data.append({
-            '时间': self.strategy.data.datetime.datetime(),
-            '开盘价': self.strategy.data.open[0],
-            '最高价': self.strategy.data.high[0],
-            '最低价': self.strategy.data.low[0],
-            '收盘价': self.strategy.data.close[0],
-            'VWMA': getattr(self.strategy, 'vwma', None),
-            'ATR': getattr(self.strategy, 'atr', None),
-            '持仓': self.strategy.position.size,
-            '资金': current_value,
-            '买入信号': self.strategy.buy_signal(),
-            '卖出信号': self.strategy.sell_signal(),
-            '交易计数': getattr(self.strategy, 'trade_count', 0),
-            '盈亏率': pnl_pct
-        })
+            self.data.append({
+                '时间': self.strategy.data.datetime.datetime(),
+                '交易计数': getattr(self.strategy, 'trade_count', 0),
+                '开盘价': self.strategy.data.open[0],
+                '最高价': self.strategy.data.high[0],
+                '最低价': self.strategy.data.low[0],
+                '收盘价': self.strategy.data.close[0],
+                '交易量': self.strategy.data.volume[0],
+                '持仓': self.strategy.position.size,
+                '当前余额': current_value,
+                '净值': round(net_value, 4),
+                '盈亏': pnl
+            })
 
     def get_analysis(self):
         return pd.DataFrame(self.data)
+
+    def record_trade(self):
+        # 仅在有交易发生时调用
+        if self.strategy.order:  # 检查当前是否有订单
+            self.record(self.strategy.order)
+
     
     '''
 类 TradeRecorder:
     初始化(策略):
-        设置 self.strategy 为 策略
-        初始化 self.data 为 空列表
-        初始化 self.trades 为 空列表
-        设置 self.current_trade 为 None    
+        设置策略为输入的策略
+        初始化数据列表为空
+        当前交易设置为 None
 
-    方法 record():
-        当前价值 = self.strategy.broker.getvalue()
-        初始价值 = self.strategy.broker.startingcash
-        如果 利润率 != 0:
-            盈亏率 = (当前价值 - 初始价值) / 初始价值 * 100
-        否则:
-            盈亏率 = 0
+    方法 记录(订单):
+        如果 订单状态 为 完成:
+            当前价值 = 策略的经纪人获取价值()
+            初始价值 = 策略的经纪人获取初始现金()
+            盈亏 = 当前价值 - 初始价值
+            净值 = 当前价值 / 初始价值 如果 初始价值 不等于 0 否则 0
 
-        将当前记录添加到 self.data:
-            '时间': 当前时间,
-            '开盘价': 当前开盘价,
-            '最高价,': 当前最高价,
-            '最低价': 当前最低价,
-            '收盘价,': 当前收盘价,
-            'VWMA': 策略的 VWMA,
-            'ATR': 策略的 ATR,
-            '持仓': 当前持仓大小,
-            '资金': 当前价值,
-            '买入信号': 策略的买入信号,
-            '卖出信号': 策略的卖出信号,
-            '交易计数': 策略的交易计数,
-            '盈亏率': 盈亏率
+            将以下信息添加到数据列表:
+                时间: 策略的数据时间
+                交易计数: 策略的交易计数
+                开盘价: 策略的数据开盘价
+                最高价: 策略的数据最高价
+                最低价: 策略的数据最低价
+                收盘价: 策略的数据收盘价
+                交易量: 策略的数据交易量
+                持仓: 策略的当前持仓
+                当前余额: 当前价值
+                净值: 净值四舍五入到小数点后四位
+                盈亏: 盈亏
 
-    方法 get_analysis():
-        返回 self.data 转换为 DataFrame
+    方法 获取分析():
+        返回数据列表转换为数据框
+
+    方法 记录交易():
+        如果 策略的当前订单 存在:
+            调用 记录(策略的当前订单)
     '''
     
 class StrategyFactory:
@@ -195,9 +201,6 @@ class VADStrategy(bt.Strategy):
             self.addition_count = 1
             self.total_amount = self.first_order_amount # 总投入金额更新
             self.buy_signal_flag = True
-            '''
-
-            '''
 
         elif long_signal and 0 < self.addition_count < self.p.max_additions and self.total_amount < value:
             if self.data.close < self.last_entry_price - self.p.k * self.atr:
@@ -209,10 +212,6 @@ class VADStrategy(bt.Strategy):
                 self.total_position += size
                 self.total_amount += add_amount
                 self.buy_signal_flag = True
-                
-                '''
-
-                '''
 
         elif short_signal and self.total_position > 0:
             self.takeprofit = True
@@ -227,8 +226,6 @@ class VADStrategy(bt.Strategy):
                 self.order = self.sell(size=self.total_position, price = close_sell)
                 self.reset_position()
                 self.sell_signal_flag = True
-
-        self.trade_recorder.record()
 
         '''
     方法 每根bar执行：
@@ -290,10 +287,6 @@ class VADStrategy(bt.Strategy):
         self.total_amount = 0
         self.last_entry_price = None
 
-        '''
-
-        '''
-
     def buy_signal(self):
         return self.buy_signal_flag
 
@@ -348,19 +341,23 @@ class VADStrategy(bt.Strategy):
             if order.isbuy():
                 if self.addition_count == 1:
                     print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                    self.trade_recorder.record_trade()
                 else:
                     print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                    self.trade_recorder.record_trade()
                     
             elif order.issell():
                 try:
                     net_profit = abs(self.calculate_net_profit(order.executed.size))
                     if self.takeprofit:
                         print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
+                        self.trade_recorder.record_trade()
                     else:
                         print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
+                        self.trade_recorder.record_trade()
                 except Exception as e:
                     print(f"计算净利润时出错: {e}")
-            self.trade_recorder.record()
+            
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             print(f'订单被取消/保证金不足/被拒绝，订单状态: {order.status}')
@@ -431,7 +428,6 @@ class BuyAndHoldStrategy(bt.Strategy):
                 print(f'可用资金不足，无法买入。现金: {cash}, 价格: {price}')
     
         self.first_bar = False
-        self.trade_recorder.record()
 
     def notify_order(self, order):
         for analyzer in self.analyzers:
@@ -450,7 +446,7 @@ class BuyAndHoldStrategy(bt.Strategy):
                 print(f'{order_time} 买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                 self.bought = True
             self.order = None
-            self.trade_recorder.record()
+            self.trade_recorder.record_trade()
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             print(f'订单失败。状态: {order.status}')

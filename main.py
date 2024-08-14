@@ -211,7 +211,7 @@ def main():
             
             output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades.csv"
             ensure_dir(output_file)
-            df.to_csv(output_file)
+            df.to_csv(output_file, encoding='utf-8-sig')
             print(f"\n交易记录已保存到: {output_file}")
 
     # 合并结果数据，调整顺序

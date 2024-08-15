@@ -50,23 +50,35 @@ class TradeRecorder:
     def record(self, order):
         # 检查订单状态并记录
         if order.status == order.Completed:
-            current_value = self.strategy.broker.getvalue()
-            initial_value = self.strategy.broker.startingcas
-            net_value = current_value / initial_value if initial_value != 0 else 0
+            buy_sell = '买' if order.isbuy() else '卖'
+            trade_price = order.executed.price
+            trade_size = order.executed.size
+            trade_value = trade_price * trade_size
+            trade_cost = trade_value * CONFIG['friction_cost']
+
+            current_cash = self.strategy.broker.getcash()
+            current_position = self.strategy.position.size
+            asset_value = current_position * self.strategy.data.close[0]
+            unrealized_pnl = current_position * (self.strategy.data.close[0] - order.executed.price)
+            total_assets = current_cash + asset_value
+            initial_value = self.strategy.broker.startingcash
+            net_value = total_assets / initial_value if initial_value != 0 else 0
 
             self.data.append({
                 '时间': self.strategy.data.datetime.datetime(),
-                '交易计数': getattr(self.strategy, 'trade_count', 0),
-                '开盘价': self.strategy.data.open[0],
-                '最高价': self.strategy.data.high[0],
-                '最低价': self.strategy.data.low[0],
-                '收盘价': self.strategy.data.close[0],
-                '交易量': self.strategy.data.volume[0],
-                '持仓': self.strategy.position.size,
-                '当前余额': current_value,
+                '买/卖': buy_sell,
+                '交易价格': trade_price,
+                '交易数量': trade_size,
+                '交易金额': trade_value,
+                '交易费用': trade_cost,
+                '当前持仓': current_position,
+                '可用资金': current_cash,
+                '资产价值':asset_value,
+                '未实现盈亏': unrealized_pnl,
+                '总资产': total_assets,
                 '净值': round(net_value, 4)
             })
-
+            
     def get_analysis(self):
         return pd.DataFrame(self.data)
 

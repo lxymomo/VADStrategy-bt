@@ -348,20 +348,20 @@ class VADStrategy(bt.Strategy):
 
             if order.isbuy():
                 if self.addition_count == 1:
-                    print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                    # print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                     self.trade_recorder.record_trade()
                 else:
-                    print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                    # print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                     self.trade_recorder.record_trade()
                     
             elif order.issell():
                 try:
                     net_profit = abs(self.calculate_net_profit(order.executed.size))
                     if self.takeprofit:
-                        print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
+                        # print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
                         self.trade_recorder.record_trade()
                     else:
-                        print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
+                        # print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
                         self.trade_recorder.record_trade()
                 except Exception as e:
                     print(f"计算净利润时出错: {e}")
@@ -449,7 +449,7 @@ class BuyAndHoldStrategy(bt.Strategy):
             order_time = self.data.datetime.datetime() 
 
             if order.isbuy():
-                print(f'{order_time} 买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+                # print(f'{order_time} 买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                 self.bought = True
             self.order = None
             self.trade_recorder.record_trade()

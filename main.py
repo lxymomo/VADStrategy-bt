@@ -44,7 +44,9 @@ def run_strategy(data_file, strategy_name, strategy_params):
     start_date = data.index[0].date()
     end_date = data.index[-1].date()
     num_years = (end_date - start_date).days / 365.25
-    print(f"交易年数: {num_years:.2f}")
+    print(f'回测开始时间：{start_date}')
+    print(f'回测结束时间：{end_date}')
+    print(f"交易年数: {num_years:.2f} 年")
 
     # 添加分析器
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
@@ -116,6 +118,8 @@ def print_analysis(results, num_years, strategy_name, data_name):
     win_rate = custom_trade_analysis.get('win_rate',0)
     profit_factor = custom_trade_analysis.get('profit_factor',0)
     max_drawdown_duration = custom_drawdown.get('max', {}).get('len', 0)
+    max_drawdown_start = custom_drawdown.get('max', {}).get('datetime', 'N/A')
+    max_drawdown_end = custom_drawdown.get('max', {}).get('recovery', 'N/A')
     avg_winning_trade_bars = custom_trade_analysis.get('avg_winning_trade_bars', 0)
 
     # 创建结果字典
@@ -133,6 +137,8 @@ def print_analysis(results, num_years, strategy_name, data_name):
             "胜率": win_rate,
             "盈亏比": profit_factor,
             "最大回撤持续K线根数": max_drawdown_duration,
+            "最大回撤开始时间": max_drawdown_start,
+            "最大回撤结束时间": max_drawdown_end,
             "盈利交易的平均持仓K线根数": avg_winning_trade_bars
         }
     }
@@ -199,7 +205,7 @@ def main():
             data_file = CONFIG['data_files'][f'qqq_{timeframe}']
             strategy_params = strategy_config['params'][timeframe] if strategy_config['params'] else {}
 
-            print(f"\n运行策略: {strategy_name} 数据: {data_file}")
+            print(f"\n数据: {data_file} \n运行策略: {strategy_name}")
             cerebro, results, num_years = run_strategy(data_file, strategy_name, strategy_params)
             
             analysis_results = print_analysis(results, num_years, strategy_name, data_file)

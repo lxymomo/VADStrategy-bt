@@ -156,14 +156,21 @@ class CustomDrawDown(bt.Analyzer):
         self.drawdown_length = 0
         self.max_drawdown_length = 0
         self.current_drawdown_length = 0
+        self.max_drawdown_start = None
+        self.max_drawdown_end = None
 
     def next(self):
         value = self.strategy.broker.getvalue()
+        current_date = self.data.datetime.date(0)
         
         if value > self.peak:
+            if self.drawdown > 0:
+                if self.drawdown == self.max_drawdown:
+                    self.max_drawdown_end = current_date
             self.peak = value
             self.drawdown_start = len(self.data)
             self.current_drawdown_length = 0
+            self.drawdown = 0
         else:
             drawdown = (self.peak - value) / self.peak
             self.drawdown = drawdown
@@ -173,13 +180,17 @@ class CustomDrawDown(bt.Analyzer):
                 self.max_drawdown = drawdown
                 self.drawdown_length = self.current_drawdown_length
                 self.max_drawdown_length = max(self.max_drawdown_length, self.drawdown_length)
+                self.max_drawdown_start = self.data.datetime.date(-self.current_drawdown_length)
+                self.max_drawdown_end = None
 
     def get_analysis(self):
         return {
             'max': {
                 'drawdown': self.max_drawdown,
                 'moneydown': self.peak * self.max_drawdown,
-                'len': self.max_drawdown_length
+                'len': self.max_drawdown_length,
+                'datetime': self.max_drawdown_start,
+                'recovery': self.max_drawdown_end
             }
         }
 

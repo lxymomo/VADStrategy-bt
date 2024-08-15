@@ -51,8 +51,7 @@ class TradeRecorder:
         # 检查订单状态并记录
         if order.status == order.Completed:
             current_value = self.strategy.broker.getvalue()
-            initial_value = self.strategy.broker.startingcash
-            pnl = current_value - initial_value
+            initial_value = self.strategy.broker.startingcas
             net_value = current_value / initial_value if initial_value != 0 else 0
 
             self.data.append({
@@ -65,8 +64,7 @@ class TradeRecorder:
                 '交易量': self.strategy.data.volume[0],
                 '持仓': self.strategy.position.size,
                 '当前余额': current_value,
-                '净值': round(net_value, 4),
-                '盈亏': pnl
+                '净值': round(net_value, 4)
             })
 
     def get_analysis(self):
@@ -183,16 +181,15 @@ class VADStrategy(bt.Strategy):
     def next(self):
         long_signal = self.data.close < self.vwma - self.p.k * self.atr
         short_signal = self.data.close > self.vwma + self.p.k * self.atr
-        commission = CONFIG['commission_rate']
-        slippage = CONFIG['slippage'] 
-        close_buy = self.data.close[0] * (1 + slippage)
-        close_sell = self.data.close[0] * (1 - slippage)
+        friction_cost = CONFIG['friction_cost']
+        close_buy = self.data.close[0] * (1 + friction_cost)
+        close_sell = self.data.close[0] * (1 - friction_cost)
         value = self.broker.getcash() 
         self.buy_signal_flag = False
         self.sell_signal_flag = False
 
         if long_signal and self.addition_count == 0:
-            self.first_order_amount = self.p.base_order_amount * (1+commission)
+            self.first_order_amount = self.p.base_order_amount * (1+friction_cost)
             size = int(self.first_order_amount / close_buy)
             self.order = self.buy(size=size)
             self.last_entry_price = close_buy
@@ -203,7 +200,7 @@ class VADStrategy(bt.Strategy):
 
         elif long_signal and 0 < self.addition_count < self.p.max_additions and self.total_amount < value:
             if self.data.close < self.last_entry_price - self.p.k * self.atr:
-                add_amount = self.first_order_amount * (self.params.dca_multiplier ** self.addition_count) * (1+commission)
+                add_amount = self.first_order_amount * (self.params.dca_multiplier ** self.addition_count) 
                 size = int(add_amount / close_buy)
                 self.order = self.buy(size=size)
                 self.last_entry_price = close_buy
@@ -251,7 +248,7 @@ class VADStrategy(bt.Strategy):
 
         elif 如果有long信号 且 0<开仓次数<最大开仓 且 总投入金额<当前总现金，则加仓：
             if close < 最新买入价 - k * atr,
-            加仓金额 = 首次花费金额 * ( dca倍数 ** 加仓次数) * (1+佣金)
+            加仓金额 = 首次花费金额 * ( dca倍数 ** 加仓次数)
             交易量 = 加仓金额 / 滑点调整后的close，向下取整
             根据算出的交易量进行买卖
             （更新数据）
@@ -294,8 +291,8 @@ class VADStrategy(bt.Strategy):
     
     def calculate_net_profit(self, sell_size):
         avg_buy_price = self.total_amount / self.total_position if self.total_position > 0 else 0
-        sell_price = self.data.close[0] * (1 - CONFIG['slippage'])
-        sell_amount = sell_size * sell_price * (1 - CONFIG['commission_rate'])
+        sell_price = self.data.close[0] * (1 - CONFIG['friction_cost'])
+        sell_amount = sell_size * sell_price
         buy_cost = sell_size * avg_buy_price
         net_profit = sell_amount - buy_cost
 
@@ -412,14 +409,12 @@ class BuyAndHoldStrategy(bt.Strategy):
 
     def next(self):
         cash = self.broker.getcash()
-        slippage = CONFIG['slippage']
-        commission = CONFIG['commission_rate']
-        price = self.data.close[0] * (1 + slippage)
+        friction_cost = CONFIG['friction_cost']
+        price = self.data.close[0] * (1 + friction_cost)
 
         if self.first_bar and not self.bought and not self.order:
-            size = cash * (1 - commission) / price  # 买入所有可用资金对应的股数
-            size = int(size) 
-            
+            size =  int(cash / price) 
+
             if size > 0:
                 self.order = self.buy(size=size)
                 print(f'尝试买入: {size} 股，当前价格: {price}')
@@ -469,12 +464,11 @@ class BuyAndHoldStrategy(bt.Strategy):
 
     方法 next():
         cash = 当前现金
-        滑点 = config设置
-        佣金 = config设置
+        摩擦费用 = CONFIG设置
         滑点调整后价格 = close * (1+滑点)
 
         if 有一根bar 且 尚未买入 且 尚未交易:
-            交易量 = 现金*(1-佣金) / 滑点调整后价格
+            交易量 = 现金/ 滑点调整后价格
             向下取整
 
             if 交易量>0:

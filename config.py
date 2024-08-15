@@ -2,8 +2,7 @@
 
 CONFIG = {
     'initial_cash': 100000,
-    'commission_rate': 5 / 10000,
-    'slippage': 1 / 1000,
+    'friction_cost': 1/1000,
 
     # ↓ 调整策略适用的、不同时间周期的参数
     'strategies': {  

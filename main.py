@@ -205,7 +205,7 @@ def main():
             data_file = CONFIG['data_files'][f'qqq_{timeframe}']
             strategy_params = strategy_config['params'][timeframe] if strategy_config['params'] else {}
 
-            print(f"\n数据: {data_file} \n运行策略: {strategy_name}")
+            print(f"数据: {data_file} \n运行策略: {strategy_name}")
             cerebro, results, num_years = run_strategy(data_file, strategy_name, strategy_params)
             
             analysis_results = print_analysis(results, num_years, strategy_name, data_file)
@@ -219,6 +219,7 @@ def main():
             ensure_dir(output_file)
             df.to_csv(output_file, encoding='utf-8-sig')
             print(f"\n交易记录已保存到: {output_file}")
+            print(f"——————————————————————————————————————————————————————————————")
 
     # 合并结果数据，调整顺序
     all_results_df = pd.DataFrame(all_results)

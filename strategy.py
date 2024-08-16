@@ -53,6 +53,7 @@ class TradeRecorder:
         current_price = self.strategy.data.close[0]
         asset_value = current_position * current_price
         total_assets = current_cash + asset_value
+        capital_utilization_rate = asset_value / total_assets
         initial_value = self.strategy.broker.startingcash
         net_value = total_assets / initial_value if initial_value != 0 else 0
 
@@ -74,6 +75,10 @@ class TradeRecorder:
 
         self.data.append({
             '时间': self.strategy.data.datetime.datetime(),
+            'open': self.strategy.data.open[0],
+            'high': self.strategy.data.high[0],
+            'low': self.strategy.data.low[0],
+            'close': self.strategy.data.close[0],
             '交易状态': buy_sell,
             '交易价格': trade_price,
             '交易数量': trade_size,
@@ -81,6 +86,7 @@ class TradeRecorder:
             '交易费用': trade_cost,
             '当前持仓': current_position,
             '可用资金': current_cash,
+            '资金利用率':capital_utilization_rate,
             '资产价值':asset_value,
             '未实现盈亏': unrealized_pnl,
             '总资产': total_assets,

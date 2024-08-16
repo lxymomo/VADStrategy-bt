@@ -215,6 +215,9 @@ def main():
             filtered_df = filtered_df.reset_index(drop=True)
             filtered_df.index = filtered_df.index + 1
 
+            columns_to_drop = ['open', 'high', 'low', 'close','资金利用率']
+            filtered_df = filtered_df.drop(columns=columns_to_drop, errors='ignore')
+
             df['策略'] = strategy_name
             df['时间框架'] = timeframe
             filtered_df['策略'] = strategy_name

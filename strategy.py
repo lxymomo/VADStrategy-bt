@@ -47,37 +47,45 @@ class TradeRecorder:
         self.data = []
         self.current_trade = None
 
-    def record(self, order):
-        # 检查订单状态并记录
-        if order.status == order.Completed:
-            buy_sell = '买' if order.isbuy() else '卖'
+    def record(self, order=None): 
+        current_cash = self.strategy.broker.getcash()
+        current_position = self.strategy.position.size
+        current_price = self.strategy.data.close[0]
+        asset_value = current_position * current_price
+        total_assets = current_cash + asset_value
+        initial_value = self.strategy.broker.startingcash
+        net_value = total_assets / initial_value if initial_value != 0 else 0
+
+        if order and order.status == order.Completed:
+            if order.isbuy():
+                buy_sell = '买' if self.strategy.position.size == order.size else '加'
+            elif order.issell():
+                buy_sell = '卖'
             trade_price = order.executed.price
             trade_size = order.executed.size
             trade_value = trade_price * trade_size
             trade_cost = trade_value * CONFIG['friction_cost']
+        else:
+            buy_sell = '无'
+            trade_price = current_price
+            trade_size = trade_value = trade_cost = 0
 
-            current_cash = self.strategy.broker.getcash()
-            current_position = self.strategy.position.size
-            asset_value = current_position * self.strategy.data.close[0]
-            unrealized_pnl = current_position * (self.strategy.data.close[0] - order.executed.price)
-            total_assets = current_cash + asset_value
-            initial_value = self.strategy.broker.startingcash
-            net_value = total_assets / initial_value if initial_value != 0 else 0
+        unrealized_pnl = asset_value - (current_position * self.strategy.position.price) if current_position > 0 else 0
 
-            self.data.append({
-                '时间': self.strategy.data.datetime.datetime(),
-                '买/卖': buy_sell,
-                '交易价格': trade_price,
-                '交易数量': trade_size,
-                '交易金额': trade_value,
-                '交易费用': trade_cost,
-                '当前持仓': current_position,
-                '可用资金': current_cash,
-                '资产价值':asset_value,
-                '未实现盈亏': unrealized_pnl,
-                '总资产': total_assets,
-                '净值': round(net_value, 4)
-            })
+        self.data.append({
+            '时间': self.strategy.data.datetime.datetime(),
+            '交易状态': buy_sell,
+            '交易价格': trade_price,
+            '交易数量': trade_size,
+            '交易金额': trade_value,
+            '交易费用': trade_cost,
+            '当前持仓': current_position,
+            '可用资金': current_cash,
+            '资产价值':asset_value,
+            '未实现盈亏': unrealized_pnl,
+            '总资产': total_assets,
+            '净值': round(net_value, 4)
+        })
             
     def get_analysis(self):
         return pd.DataFrame(self.data)
@@ -207,7 +215,7 @@ class VADStrategy(bt.Strategy):
             self.last_entry_price = close_buy
             self.total_position = size
             self.addition_count = 1
-            self.total_amount = self.first_order_amount # 总投入金额更新
+            self.total_amount = self.first_order_amount
             self.buy_signal_flag = True
 
         elif long_signal and 0 < self.addition_count < self.p.max_additions and self.total_amount < value:
@@ -234,7 +242,8 @@ class VADStrategy(bt.Strategy):
                 self.order = self.sell(size=self.total_position, price = close_sell)
                 self.reset_position()
                 self.sell_signal_flag = True
-
+        
+        self.trade_recorder.record()
         '''
     方法 每根bar执行：
         long信号 = close < vwma - k*atr
@@ -344,28 +353,25 @@ class VADStrategy(bt.Strategy):
         if order.status == order.Completed and order.ref not in self.processed_orders:
             self.processed_orders.add(order.ref)
             self.trade_count += 1
-            order_time = self.data.datetime.datetime() 
+            # order_time = self.data.datetime.datetime() 
 
-            if order.isbuy():
-                if self.addition_count == 1:
-                    # print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
-                    self.trade_recorder.record_trade()
-                else:
-                    # print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
-                    self.trade_recorder.record_trade()
+            # if order.isbuy():
+            #     if self.addition_count == 1:
+            #         print(f'{order_time} 开仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
+            #     else:
+            #         print(f'{order_time} 加仓: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                     
-            elif order.issell():
-                try:
-                    net_profit = abs(self.calculate_net_profit(order.executed.size))
-                    if self.takeprofit:
-                        # print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
-                        self.trade_recorder.record_trade()
-                    else:
-                        # print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
-                        self.trade_recorder.record_trade()
-                except Exception as e:
-                    print(f"计算净利润时出错: {e}")
+            # elif order.issell():
+            #     try:
+            #         net_profit = abs(self.calculate_net_profit(order.executed.size))
+            #         if self.takeprofit:
+            #             print(f'{order_time} 止盈：卖出 {order.executed.size} 股，价格: {order.executed.price}, 收益: {net_profit:.2f}')
+            #         else:
+            #             print(f'{order_time} 止损：卖出 {order.executed.size} 股，价格: {order.executed.price}, 亏损: {net_profit:.2f}')
+            #     except Exception as e:
+            #         print(f"计算净利润时出错: {e}")
             
+            self.trade_recorder.record(order)
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             print(f'订单被取消/保证金不足/被拒绝，订单状态: {order.status}')
@@ -434,6 +440,7 @@ class BuyAndHoldStrategy(bt.Strategy):
                 print(f'可用资金不足，无法买入。现金: {cash}, 价格: {price}')
     
         self.first_bar = False
+        self.trade_recorder.record()
 
     def notify_order(self, order):
         for analyzer in self.analyzers:
@@ -452,8 +459,8 @@ class BuyAndHoldStrategy(bt.Strategy):
                 # print(f'{order_time} 买入并持有: 买入 {order.executed.size} 股，价格: {order.executed.price}')
                 self.bought = True
             self.order = None
-            self.trade_recorder.record_trade()
-
+            self.trade_recorder.record(order)
+            
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
             print(f'订单失败。状态: {order.status}')
             self.bought = False

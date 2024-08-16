@@ -197,7 +197,8 @@ def print_analysis(results, num_years, strategy_name, data_name):
     返回 分析结果
 '''
 def main():
-    all_results = []  # 用于存储所有分析结果的列表
+    all_df = []       # 用于存储完整的数据
+    all_filtered_df = []  # 用于存储交易记录
 
     # 运行所有策略组合
     for strategy_name, strategy_config in CONFIG['strategies'].items():
@@ -206,30 +207,40 @@ def main():
             strategy_params = strategy_config['params'][timeframe] if strategy_config['params'] else {}
 
             print(f"数据: {data_file} \n运行策略: {strategy_name}")
-            cerebro, results, num_years = run_strategy(data_file, strategy_name, strategy_params)
-            
-            analysis_results = print_analysis(results, num_years, strategy_name, data_file)
-            analysis_results['时间间隔'] = f"{num_years:.2f}年"
-            all_results.append(analysis_results)
-            
+            cerebro, results, num_years= run_strategy(data_file, strategy_name, strategy_params)
+        
             strategy = results[0]
             df = strategy.trade_recorder.get_analysis()
+            filtered_df = df[df['交易状态'].isin(['买', '加', '卖'])].copy()
+            filtered_df = filtered_df.reset_index(drop=True)
+            filtered_df.index = filtered_df.index + 1
+
+            df['策略'] = strategy_name
+            df['时间框架'] = timeframe
+            filtered_df['策略'] = strategy_name
+            filtered_df['时间框架'] = timeframe
             
+            all_df.append(df)
+            all_filtered_df.append(filtered_df)
+
+            # output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades_all.csv"
+            # ensure_dir(output_file)
+            # df.to_csv(output_file, encoding='utf-8-sig')
+
             output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades.csv"
             ensure_dir(output_file)
-            df.to_csv(output_file, encoding='utf-8-sig')
+            filtered_df.to_csv(output_file, encoding='utf-8-sig')
             print(f"\n交易记录已保存到: {output_file}")
+            
             print(f"——————————————————————————————————————————————————————————————")
 
-    # 合并结果数据，调整顺序
-    all_results_df = pd.DataFrame(all_results)
-    columns_order = ['策略', '数据', '时间间隔'] + [col for col in all_results_df.columns if col not in ['策略', '数据', '时间间隔']]
-    all_results_df = all_results_df[columns_order]
+    # 合并所有完整的交易记录
+    combined_df = pd.concat(all_df, ignore_index=True)
 
-    # 保存合并后的结果到一个CSV文件
-    combined_output_file = f"{CONFIG['output_dir']}combined_analysis_results.csv"
-    all_results_df.to_csv(combined_output_file, index=False)
-    print(f"合并的分析结果已保存到: {combined_output_file}")
+    # 合并所有筛选后的交易记录
+    combined_filtered_df = pd.concat(all_filtered_df, ignore_index=True)
+
+    return combined_df, combined_filtered_df
 
 if __name__ == '__main__':
     main()

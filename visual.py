@@ -2,14 +2,11 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from config import CONFIG  # 导入配置
+from main import main
 
 def visualize_strategy_results():
-    # 从配置中读取数据路径
-    data_path = CONFIG['visualization']['data_path']
-    
-    # 读取数据
-    df = pd.read_csv(data_path)
-    df['datetime'] = pd.to_datetime(df['datetime'])
+    combined_df, combined_filtered_df = main()
+    combined_df['datetime'] = pd.to_datetime(combined_df['datetime'])
 
     # 创建子图，指定2行1列布局
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
@@ -63,8 +60,6 @@ if __name__ == "__main__":
 '''
 方法 可视化策略结果() 
     数据路径 = CONFIG['visualization']['data_path']
-    
-    df = 读取CSV(数据路径)
     df['日期时间'] = 转换为日期时间(数据框['日期时间'])
 
     图形 = 创建子图(行数=2, 列数=1, 共享X轴=True,

@@ -441,7 +441,7 @@ class BuyAndHoldStrategy(bt.Strategy):
 
             if size > 0:
                 self.order = self.buy(size=size)
-                print(f'尝试买入: {size} 股，当前价格: {price}')
+                # print(f'尝试买入: {size} 股，当前价格: {price}')
             else:
                 print(f'可用资金不足，无法买入。现金: {cash}, 价格: {price}')
     

@@ -38,6 +38,7 @@ CONFIG = {
         'qqq_240min': 'processed/BATS_QQQ_240min.csv' # 数据文件 QQQ 240min
     },
     'output_dir': 'results/', # 输出文件夹位置
+    'df_dir':'visual/',
     'visualization': {
         'data_path': 'results/vad_5min_trades.csv'  # 需要可视化的文件
     }

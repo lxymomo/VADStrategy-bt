@@ -197,8 +197,6 @@ def print_analysis(results, num_years, strategy_name, data_name):
     返回 分析结果
 '''
 def main():
-    all_df = []       # 用于存储完整的数据
-    all_filtered_df = []  # 用于存储交易记录
 
     # 运行所有策略组合
     for strategy_name, strategy_config in CONFIG['strategies'].items():
@@ -222,9 +220,6 @@ def main():
             df['时间框架'] = timeframe
             filtered_df['策略'] = strategy_name
             filtered_df['时间框架'] = timeframe
-            
-            all_df.append(df)
-            all_filtered_df.append(filtered_df)
 
             # output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades_all.csv"
             # ensure_dir(output_file)
@@ -234,53 +229,56 @@ def main():
             ensure_dir(output_file)
             filtered_df.to_csv(output_file, encoding='utf-8-sig')
             print(f"\n交易记录已保存到: {output_file}")
+
+            output_df = f"{CONFIG['df_dir']}{strategy_name}_{timeframe}_all_trades.csv"
+            ensure_dir(output_df)
+            df.to_csv(output_df, encoding='utf-8-sig')
+            print(f"可视化数据已保存到: {output_file}")
             
             print(f"——————————————————————————————————————————————————————————————")
-
-    # 合并所有完整的交易记录
-    combined_df = pd.concat(all_df, ignore_index=True)
-
-    # 合并所有筛选后的交易记录
-    combined_filtered_df = pd.concat(all_filtered_df, ignore_index=True)
-
-    return combined_df, combined_filtered_df
 
 if __name__ == '__main__':
     main()
 
 '''
-方法 主函数():
-    所有结果 = 空列表
+方法 主函数 main():
 
-    对于 配置文件中的每个 策略名称, config策略配置:
-        对于 每个 enabled_timeframes:
-            data_file = cnofig设置[data_files][qqq_{timeframe}]
-            strategy_params = 获取对应timeframe的策略参数（如果有）
+    # 遍历所有策略组合
+    对于 每个 策略名称 和 策略配置 在 配置['策略'].项() 中:
+        对于 每个 时间框架 在 策略配置['启用时间框架'] 中:
+            数据文件 = 配置['数据文件'][f'qqq_{时间框架}']
+            策略参数 = 策略配置['参数'][时间框架] 如果 策略配置['参数'] 否则 {}
 
-            打印(f"\n运行策略: {策略名称} 数据: {数据文件}")
-            Cerebro实例, 回测结果, 交易年数 = 运行策略(数据文件, 策略名称, 策略参数)
+            打印(f"数据: {数据文件} \n运行策略: {策略名称}")
+            cerebro, 结果, 年数 = 运行策略(数据文件, 策略名称, 策略参数)
+        
+            策略 = 结果[0]
+            数据框 = 策略.交易记录.获取分析()
+            过滤后的数据框 = 数据框[数据框['交易状态'].在(['买', '加', '卖'])].复制()
+            过滤后的数据框 = 过滤后的数据框.重置索引(丢弃=True)
+            过滤后的数据框.索引 = 过滤后的数据框.索引 + 1
+
+            要删除的列 = ['开盘', '最高', '最低', '收盘', '资金利用率']
+            过滤后的数据框 = 过滤后的数据框.删除列(要删除的列, 忽略错误=True)
+
+            数据框['策略'] = 策略名称
+            数据框['时间框架'] = 时间框架
+            过滤后的数据框['策略'] = 策略名称
+            过滤后的数据框['时间框架'] = 时间框架
+
+            输出文件 = f"{配置['输出目录']}{策略名称}_{时间框架}_交易记录.csv"
+            确保目录(输出文件)
+            过滤后的数据框.保存为CSV(输出文件, 编码='utf-8-sig')
+            打印(f"\n交易记录已保存到: {输出文件}")
+
+            输出数据框 = f"{配置['数据框目录']}{策略名称}_{时间框架}_所有交易.csv"
+            确保目录(输出数据框)
+            数据框.保存为CSV(输出数据框, 编码='utf-8-sig')
+            打印(f"\n交易记录已保存到: {输出文件}")
             
-            analysis_results = 打印分析结果(results, num_years, strategy_name, data_file)
-            analysis_results['时间间隔'] = f"{交易年数:.2f}年"
-            将 分析结果 添加到 所有结果 列表中
-            
-            策略实例 = 回测结果[0]
-            df = 获取策略实例的交易记录
-            
-            输出文件路径 = 构建交易记录输出文件路径
-            确保输出目录存在(输出文件路径)
-            将交易记录保存为CSV文件(输出文件路径)
-            打印(f"交易记录已保存到: {输出文件路径}")
+            打印("——————————————————————————————————————————————————————————————")
 
-    all_results_df = 将所有结果转换为数据框
-    列顺序 = ['策略', '数据', '时间间隔'] + [其他列]
-    all_results_df = 根据新的列顺序重排列数据框
-
-    合并结果输出文件 = 构建合并结果输出文件路径
-    将所有结果数据框保存为CSV文件(合并结果输出文件)
-    打印(f"合并的分析结果已保存到: {合并结果输出文件}")
-
-如果 这是主程序:
-    执行 主函数()
+如果 __name__ 是 '__main__':
+    调用 主函数()
 
 '''

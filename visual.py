@@ -1,32 +1,61 @@
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from config import CONFIG  # 导入配置
-from main import main
+import dash
+from dash import dcc, html
+from dash.dependencies import Input, Output
+import os
 
-def visualize_strategy_results():
-    combined_df, combined_filtered_df = main()
-    combined_df['时间'] = pd.to_datetime(combined_df['时间'])
+app = dash.Dash(__name__)
 
-    # 创建子图，指定2行1列布局
+# 定义数据目录
+DATA_DIR = 'visual/'
+
+def load_data(strategy, timeframe):
+    filename = f"{strategy}_{timeframe}_all_trades.csv"
+    file_path = os.path.join(DATA_DIR, filename)
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path)
+        df['时间'] = pd.to_datetime(df['时间'])
+        return df
+    else:
+        return pd.DataFrame()  # 返回空DataFrame如果文件不存在
+
+'''
+# 定义数据目录
+数据目录 = 'visual/'
+
+定义 加载数据(strategy, timeframe):
+    文件名 = f"{策略}_{时间框架}_所有交易.csv"
+    文件路径 = os.path.join(数据目录, 文件名)
+    如果 os.path.exists(文件路径):
+        数据框 = pd.read_csv(文件路径)
+        数据框['时间'] = pd.to_datetime(数据框['时间'])
+        返回 数据框
+    否则:
+        返回 空数据框()  # 如果文件不存在，返回空数据框
+
+'''
+
+def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark):
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
                         vertical_spacing=0.1, 
                         row_heights=[0.5, 0.25, 0.25],
                         subplot_titles=('Candlestick Chart', 'Equity Curve', 'Capital Utilization Rate'))
 
     # Add Candlestick chart
-    fig.add_trace(go.Candlestick(x=combined_df['时间'],
-                                 open=combined_df['open'],
-                                 high=combined_df['high'],
-                                 low=combined_df['low'],
-                                 close=combined_df['close'],
+    fig.add_trace(go.Candlestick(x=strategy_df['时间'],
+                                 open=strategy_df['open'],
+                                 high=strategy_df['high'],
+                                 low=strategy_df['low'],
+                                 close=strategy_df['close'],
                                  name='Candlestick'),
                   row=1, col=1)
 
     # Mark buy and sell points
-    buy_signals = combined_df[combined_df['交易状态'] == '买']
-    add_signals = combined_df[combined_df['交易状态'] == '加']
-    sell_signals = combined_df[combined_df['交易状态'] == '卖']
+    buy_signals = strategy_df[strategy_df['交易状态'] == '买']
+    add_signals = strategy_df[strategy_df['交易状态'] == '加']
+    sell_signals = strategy_df[strategy_df['交易状态'] == '卖']
 
     fig.add_trace(go.Scatter(x=buy_signals['时间'], y=buy_signals['low'], mode='markers',
                              marker=dict(symbol='triangle-up', size=15, color='lime', line=dict(color='green', width=2)),
@@ -40,19 +69,24 @@ def visualize_strategy_results():
                              marker=dict(symbol='triangle-down', size=15, color='red', line=dict(color='darkred', width=2)),
                              name='Sell Signal'), row=1, col=1)
 
-    # 资金曲线（散点图）
-    fig.add_trace(go.Scatter(x=combined_df['时间'], y=combined_df['总资产'], mode='markers', 
-                             name='Equity', marker=dict(color='navy', size=5)),
+    # 资金曲线（策略）
+    fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['总资产'], mode='lines+markers', 
+                             name='Strategy Equity', marker=dict(color='navy', size=5)),
+                  row=2, col=1)
+
+    # 资金曲线（基准）
+    fig.add_trace(go.Scatter(x=benchmark_df['时间'], y=benchmark_df['总资产'], mode='lines+markers', 
+                             name='Benchmark Equity', marker=dict(color='red', size=5)),
                   row=2, col=1)
 
     # 资金利用率（柱状图）
-    fig.add_trace(go.Bar(x=combined_df['时间'], y=combined_df['资金利用率'], 
-                         name='Capital Utilization Rate', marker_color='orange'),
+    fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['资金利用率'], mode='markers', 
+                         name='Capital Utilization Rate', marker=dict(color='orange', size=3)),
                   row=3, col=1)
 
     # 更新图表
     fig.update_layout(
-        title='Strategy Visualization',
+        title=f'Strategy Visualization - {timeframe} {strategy} vs {benchmark}',
         height=1200,
         width=1200,
         xaxis_rangeslider_visible=False,
@@ -68,61 +102,110 @@ def visualize_strategy_results():
     # 更新X轴
     fig.update_xaxes(title_text="时间", row=3, col=1)
 
-    # Show the figure
-    fig.show()
-
-# Usage example
-if __name__ == "__main__":
-    visualize_strategy_results()
+    return fig
 
 '''
-方法 可视化策略结果() 
-    数据路径 = CONFIG['visualization']['data_path']
-    df['日期时间'] = 转换为日期时间(数据框['日期时间'])
+定义 创建图表(策略数据框, 基准数据框, 时间框架, 策略, 基准):
+    创建子图，行数=3，列数=1，共享X轴，垂直间距=0.1, 每行高度=[], 子图标题=[],
 
-    图形 = 创建子图(行数=2, 列数=1, 共享X轴=True,
-                    垂直间距=0.1, 
-                    行高=[0.7, 0.3],
-                    子图标题=('K线图', '权益曲线'))
+    # 添加蜡烛图
+    添加蜡烛图到子图（时间，开高收低，蜡烛图）第一行，第一列
 
-    添加追踪(图形, K线图, x=数据框['日期时间'],
-              开盘=数据框['开盘'],
-              最高=数据框['最高'],
-              最低=数据框['最低'],
-              收盘=数据框['收盘'],
-              名称='K线',
-              行=1, 列=1)
+    # 标记买入和卖出点
+    买入信号 = 策略数据框[策略数据框['交易状态'] == '买']
+    加信号 = 策略数据框[策略数据框['交易状态'] == '加']
+    卖出信号 = 策略数据框[策略数据框['交易状态'] == '卖']
 
-    买入信号 = df[数据框['买入信号'] == 1]
-    卖出信号 = df[数据框['卖出信号'] == 1]
+    添加买入信号到蜡烛图
+    添加加信号到图表
+    添加卖信号到图表
 
-    添加追踪(图形, 散点图, x=买入信号['日期时间'], y=买入信号['最低'], 模式='标记',
-              标记=设置标记(符号='三角形向上', 尺寸=15, 颜色='青柠', 边线=设置边线(颜色='绿色', 宽度=2)),
-              名称='买入信号', 行=1, 列=1)
+    # 资金曲线（策略）
+    添加策略资金曲线到图表
 
-    添加追踪(图形, 散点图, x=卖出信号['日期时间'], y=卖出信号['最高'], 模式='标记',
-              标记=设置标记(符号='三角形向下', 尺寸=15, 颜色='红色', 边线=设置边线(颜色='深红', 宽度=2)),
-              名称='卖出信号', 行=1, 列=1)
+    # 资金曲线（基准）
+    添加基准资金曲线到图表
 
-    添加追踪(图形, 散点图, x=数据框['日期时间'], y=数据框['权益'], 模式='线', 名称='权益', 线=设置线(颜色='海军蓝', 宽度=2),
-              行=2, 列=1)
+    # 资金利用率（柱状图）
+    添加资金利用率柱状图到图表
 
-    更新布局(图形,
-        标题='策略可视化',
-        X轴标题='日期时间',
-        高度=800,
-        宽度=1200,
-        X轴范围滑块可见=False,  // 禁用范围滑动器
-        悬停模式='x',  // 设置悬停模式为垂直线
-        图例=设置图例(x=0.01, y=0.99)
-    )
+    # 更新图表布局
+    更新图表标题和尺寸
+    更新Y轴和X轴标签
 
-    显示图形(图形)
-}
+    返回 图表
 
-if __name__ 等于 "__main__" {
-    可视化策略结果()
-}
+'''
 
+# 应用布局
+app.layout = html.Div([
+    html.H1("Strategy Visualization"),
+    dcc.Dropdown(
+        id='timeframe-dropdown',
+        options=[
+            {'label': '5分钟', 'value': '5min'},
+            {'label': '240分钟', 'value': '240min'}
+        ],
+        value='240min'
+    ),
+    dcc.Dropdown(
+        id='target-dropdown',
+        options=[
+            {'label': 'QQQ', 'value': 'QQQ'},
+            {'label': 'BTC', 'value': 'BTC'},
+            {'label': '600519', 'value': '600519'}
+        ],
+        value='BTC'
+    ),
+    dcc.Dropdown(
+        id='benchmark-dropdown',
+        options=[
+            {'label': '买入并持有', 'value': 'buyandhold'},
+            {'label': '国债', 'value': 'treasury'},
+            {'label': 'BTC', 'value': 'btc'}
+        ],
+        value='buyandhold'
+    ),
+    dcc.Graph(id='strategy-graph')
+])
+
+@app.callback(
+    Output('strategy-graph', 'figure'),
+    [Input('timeframe-dropdown', 'value'),
+     Input('benchmark-dropdown', 'value')]
+)
+def update_graph(timeframe, benchmark):
+    strategy_df = load_data('vad', timeframe)
+    benchmark_df = load_data(benchmark, timeframe)
+    
+    if strategy_df.empty or benchmark_df.empty:
+        return go.Figure().add_annotation(text="No data available", showarrow=False, font=dict(size=20))
+    
+    return create_figure(strategy_df, benchmark_df, timeframe, 'vad', benchmark)
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
+
+'''
+# 应用布局
+应用布局 = html.Div([
+    html.H1("策略可视化"),
+    下拉菜单1：选择时间框架,
+    下拉菜单2：选择目标,
+    下拉菜单3：选择基准,
+    图表组件
+])
+
+定义 更新图表(时间框架, 基准):
+    策略数据框 = 加载数据('vad', 时间框架)
+    基准数据框 = 加载数据(基准, 时间框架)
+    
+    如果 策略数据框为空 或 基准数据框为空:
+        返回 显示无数据可用的图表
+    
+    返回 创建图表(策略数据框, 基准数据框, 时间框架, 'vad', 基准)
+
+如果 __name__ 是 '__main__':
+    运行应用服务器(调试模式=True)
 
 '''

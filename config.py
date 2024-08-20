@@ -1,46 +1,45 @@
-import glob
-import os
-import re
+# config.py
 
-'''
-用于修改参数
-'''
+CONFIG = {
+    'initial_cash': 100000,
+    'friction_cost': 1/1000,
 
-# 获取 data 文件夹中的所有 CSV 文件
-data_dir = 'data'
-data_files = sorted(
-    [(os.path.splitext(os.path.basename(file))[0], file) for file in glob.glob(os.path.join(data_dir, '*.csv'))],
-    key=lambda x: int(re.search(r'\d+', x[0]).group())
-)
-# 回测时间参数
-backtest_params = {
-    'start_date': '2010/06/30 9:00',
-    'end_date': '2024/06/30 20:00'
-}
-
-# 资金、佣金、滑点设置
-broker_params = {
-    'initial_cash': 1000000,
-    'commission_rate': 5/10000,
-    'slippage': 1/1000
-}
-
-'''
-策略 Strategy 参数设置
-'''
-
-# VADStrategy参数
-vad_strategy_params = {
-    'k': 1.6,
-    'base_order_amount': 10000,
-    'dca_multiplier': 1.5,
-    'number_of_dca_orders': 3
-}
-
-'''
-指标 Indicator 参数设置
-'''
-# VWMA
-indicator_params = {
-    'vwma_period': 200
+    # ↓ 调整策略适用的、不同时间周期的参数
+    'strategies': {  
+        'vad': {
+            # ↓ 准许适用5min, 240min参数，这一步是为了以后能放入更多数据
+            'enabled_timeframes': ['5min', '240min'],  
+            'params': { 
+                '5min': {
+                    'k': 1.6,
+                    'base_order_amount': 10000,
+                    'dca_multiplier': 1.5,
+                    'max_additions': 4,
+                    'vwma_period': 14,
+                    'atr_period': 14
+                },
+                '240min': {
+                    'k': 0.7,
+                    'base_order_amount': 10000,
+                    'dca_multiplier': 1.5,
+                    'max_additions': 4,
+                    'vwma_period': 14,
+                    'atr_period': 14
+                }
+            }
+        },
+        'buyandhold': {
+            'enabled_timeframes': ['5min', '240min'],
+            'params': None
+        }
+    },
+    'data_files': {
+        'qqq_5min': 'processed/BATS_QQQ_5min.csv',   # 数据文件 QQQ 5min
+        'qqq_240min': 'processed/BATS_QQQ_240min.csv' # 数据文件 QQQ 240min
+    },
+    'output_dir': 'results/', # 输出文件夹位置
+    'df_dir':'visual/',
+    'visualization': {
+        'data_path': 'results/vad_5min_trades.csv'  # 需要可视化的文件
+    }
 }

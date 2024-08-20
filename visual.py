@@ -1,133 +1,214 @@
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 import pandas as pd
-import numpy as np
-from dash import Dash, dcc, html
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import dash
+from dash import dcc, html
 from dash.dependencies import Input, Output
+import os
+from config import *
 
-def visualize_strategy(cerebro, strategy, data, start_date, end_date):
-    # 调试信息
-    print("数据行:", data.lines.getlinealiases())
-    print("数据长度:", len(data))
-    print("策略:", type(strategy))
-    print(f"时间范围: {start_date} to {end_date}")
+app = dash.Dash(__name__)
 
-    # 检查数据长度
-    print(f"data.datetime.array length: {len(data.datetime.array)}")
-    print(f"data length: {len(data)}")
+# 定义数据目录
+DATA_DIR = CONFIG['df_dir']
 
-    # 将Backtrader的数据转换为pandas DataFrame
-    df = pd.DataFrame({
-        'close': data.lines.close.array,
-        'low': data.lines.low.array,
-        'high': data.lines.high.array,
-        'open': data.lines.open.array
-    })
+def load_data(strategy, timeframe, target):
+    filename = f"{strategy}_{timeframe}_{target}_all_trades.csv"
+    file_path = os.path.join(DATA_DIR, filename)
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path)
+        df['时间'] = pd.to_datetime(df['时间'])
+        return df
+    else:
+        return pd.DataFrame()  # 返回空DataFrame如果文件不存在
 
-    # 获取所有数据点的日期时间信息
-    datetime_values = [data.datetime.array[i] for i in range(len(data.datetime.array))]  # 直接使用 data.datetime.array 的索引
+def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, target):
+    fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
+                        vertical_spacing=0.1, 
+                        row_heights=[0.5, 0.25, 0.25],
+                        subplot_titles=('交易信号图', '总资金曲线', '资金利用率'))
 
-    # 将 "datetime" 列设置为索引并转换为 DatetimeIndex
-    df.index = pd.to_datetime(datetime_values)
+    fig.add_trace(go.Candlestick(x=strategy_df['时间'],
+                                 open=strategy_df['open'],
+                                 high=strategy_df['high'],
+                                 low=strategy_df['low'],
+                                 close=strategy_df['close'],
+                                 name='交易曲线'),
+                  row=1, col=1)
 
-    # 过滤日期范围
-    df = df[(df.index.date >= start_date) & (df.index.date <= end_date)]  # 使用 to_pydatetime() 获取日期信息
+    buy_signals = strategy_df[strategy_df['交易状态'] == '买']
+    add_signals = strategy_df[strategy_df['交易状态'] == '加']
+    sell_signals = strategy_df[strategy_df['交易状态'] == '卖']
+
+    fig.add_trace(go.Scatter(x=buy_signals['时间'], y=buy_signals['low'], mode='markers',
+                             marker=dict(symbol='triangle-up', size=15, color='lime', line=dict(color='green', width=2)),
+                             name='开仓信号'), row=1, col=1)
     
-    print("DataFrame info:")
-    print(df.info())
-    print("DataFrame head:")
-    print(df.head())
+    fig.add_trace(go.Scatter(x=add_signals['时间'], y=add_signals['low'], mode='markers',
+                             marker=dict(symbol='triangle-up', size=15, color='lime', line=dict(color='green', width=2)),
+                             name='加仓信号'), row=1, col=1)
 
-    # 创建Plotly图表
-    fig = make_subplots(rows=1, cols=1, shared_xaxes=True, subplot_titles=('Price',))
+    fig.add_trace(go.Scatter(x=sell_signals['时间'], y=sell_signals['high'], mode='markers',
+                             marker=dict(symbol='triangle-down', size=15, color='red', line=dict(color='darkred', width=2)),
+                             name='平仓信号'), row=1, col=1)
 
-    # 添加K线图
-    fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price'))
+    fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['总资产'], mode='lines+markers', 
+                             name=f'{strategy} 资金曲线', marker=dict(color='red', size=1)),
+                  row=2, col=1)
 
-    # 添加VWMA指标线
-    if hasattr(strategy, 'vwma14'):
-        vwma_values = np.array(strategy.vwma14.array)
-        vwma_values = vwma_values[-len(df):]  # 确保VWMA长度与df相同
-        vwma_line = go.Scatter(x=df.index, y=vwma_values, name='VWMA', line=dict(color='blue'))
-        fig.add_trace(vwma_line)
-    else:
-        print("Warning: VWMA14 not found in strategy")
+    fig.add_trace(go.Scatter(x=benchmark_df['时间'], y=benchmark_df['总资产'], mode='lines+markers', 
+                             name=f'{benchmark} 资金曲线', marker=dict(color='grey', size=1)),
+                  row=2, col=1)
 
-    # 处理买卖点
-    if hasattr(strategy, 'buy_dates') and hasattr(strategy, 'sell_dates'):
-        buy_dates = pd.to_datetime(strategy.buy_dates, format='%Y/%m/%d %H:%M')
-        sell_dates = pd.to_datetime(strategy.sell_dates, format='%Y/%m/%d %H:%M')
-        
-        buy_dates = buy_dates[(buy_dates.date >= start_date) & (buy_dates.date <= end_date)]
-        sell_dates = sell_dates[(sell_dates.date >= start_date) & (sell_dates.date <= end_date)]
-        
-        buy_prices = df.loc[buy_dates, 'close']
-        sell_prices = df.loc[sell_dates, 'close']
+    fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['资金利用率'], mode='markers', 
+                         name='资金利用率', marker=dict(color='orange', size=1)),
+                  row=3, col=1)
 
-        buy_points = go.Scatter(x=buy_dates, y=buy_prices, mode='markers', name='Buy', marker=dict(color='green', size=10, symbol='triangle-up'))
-        sell_points = go.Scatter(x=sell_dates, y=sell_prices, mode='markers', name='Sell', marker=dict(color='red', size=10, symbol='triangle-down'))
-        
-        fig.add_trace(buy_points)
-        fig.add_trace(sell_points)
-    else:
-        print("Warning: Buy/Sell dates not found in strategy")
+    for i in range(1, 4):
+        fig.update_xaxes(
+            title_text="时间" if i == 3 else "",
+            row=i, col=1,
+            type='date',
+            tickformatstops=[
+                dict(dtickrange=[None, 1000], value="%H:%M:%S.%L"),
+                dict(dtickrange=[1000, 60000], value="%H:%M:%S"),
+                dict(dtickrange=[60000, 3600000], value="%H:%M"),
+                dict(dtickrange=[3600000, 86400000], value="%H:%M"),
+                dict(dtickrange=[86400000, 604800000], value="%e. %b"),
+                dict(dtickrange=[604800000, "M1"], value="%e. %b"),
+                dict(dtickrange=["M1", "M12"], value="%b '%y"),
+                dict(dtickrange=["M12", None], value="%Y")
+            ],
+            hoverformat="%Y-%m-%d %H:%M:%S",
+            ticklabelmode="instant",
+            showticklabels=True
+        )
 
-    # 设置图表布局
-    fig.update_layout(title='Strategy Visualization', xaxis_rangeslider_visible=False)
+    fig.update_yaxes(title_text="价格", row=1, col=1)
+    fig.update_yaxes(title_text="资产", row=2, col=1)
+    fig.update_yaxes(title_text="资金利用率", row=3, col=1)
 
-    # 创建Dash应用
-    app = Dash(__name__)
+    # 获取数据的时间范围
+    date_min = strategy_df['时间'].min()
+    date_max = strategy_df['时间'].max()
 
-    app.layout = html.Div([
-        dcc.Graph(id='graph', figure=fig),
-        html.Div([
-            html.Label('Date Range:'),
-            dcc.DatePickerRange(
-                id='date-range',
-                start_date=df.index.min().date(),
-                end_date=df.index.max().date(),
-                display_format='YYYY-MM-DD'
-            )
-        ])
-    ])
-
-    @app.callback(
-        Output('graph', 'figure'),
-        Input('date-range', 'start_date'),
-        Input('date-range', 'end_date')
+    fig.update_layout(
+        height=1400,
+        xaxis=dict(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1M", step="month", stepmode="backward"),
+                    dict(count=3, label="3M", step="month", stepmode="backward"),
+                    dict(count=6, label="6M", step="month", stepmode="backward"),
+                    dict(count=1, label="1Y", step="year", stepmode="backward"),
+                    dict(step="all", label="All")
+                ]),
+                font=dict(size=10),
+                bgcolor='rgba(150, 200, 250, 0.4)',
+                activecolor='rgba(100, 150, 200, 0.8)'
+            ),
+            rangeslider=dict(visible=False),
+            type="date",
+            range=[date_min, date_max]  # 设置默认显示全部数据范围
+        ),
+        xaxis2=dict(rangeslider=dict(visible=False), range=[date_min, date_max]),
+        xaxis3=dict(rangeslider=dict(visible=False), range=[date_min, date_max]),
+        hovermode='x unified',
+        legend=dict(x=1.05, y=0.5),
+        margin=dict(l=50, r=50, t=80, b=50),
+        autosize=True,
+        uirevision='dataset'
     )
-    def update_graph(start_date, end_date):
-        print(f"Updating graph: start_date={start_date}, end_date={end_date}")
+
+    return fig
+
+app.layout = html.Div([
+    html.H1(id='strategy-title', style={'textAlign': 'center'}),
+    
+    html.Div([
+        html.Div([
+            html.Label('策略:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='strategy-dropdown',
+                options=[
+                    {'label': 'VAD策略', 'value': 'vad'},
+                    {'label': '其他策略1', 'value': 'strategy1'},
+                    {'label': '其他策略2', 'value': 'strategy2'}
+                ],
+                value='vad',
+                style={'width': '150px'}
+            )
+        ], style={'display': 'inline-block', 'marginRight': '20px'}),
         
-        start_date = pd.to_datetime(start_date).date()
-        end_date = pd.to_datetime(end_date).date()
+        html.Div([
+            html.Label('标的:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='target-dropdown',
+                options=[
+                    {'label': 'QQQ', 'value': 'QQQ'},
+                    {'label': 'BTC', 'value': 'BTC'},
+                    {'label': '600519', 'value': '600519'}
+                ],
+                value='QQQ',
+                style={'width': '120px'}
+            )
+        ], style={'display': 'inline-block', 'marginRight': '20px'}),
 
-        mask = (df.index.date >= start_date) & (df.index.date <= end_date)  # 使用 to_pydatetime() 获取日期信息
-        df_filtered = df[mask]
+        html.Div([
+            html.Label('时间框架:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='timeframe-dropdown',
+                options=[
+                    {'label': '5分钟', 'value': '5min'},
+                    {'label': '240分钟', 'value': '240min'}
+                ],
+                value='240min',
+                style={'width': '120px'}
+            )
+        ], style={'display': 'inline-block', 'marginRight': '20px'}),
+                
+        html.Div([
+            html.Label('基准:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='benchmark-dropdown',
+                options=[
+                    {'label': '买入并持有', 'value': 'buyandhold'},
+                    {'label': '国债', 'value': 'treasury'},
+                    {'label': 'BTC', 'value': 'btc'}
+                ],
+                value='buyandhold',
+                style={'width': '150px'}
+            )
+        ], style={'display': 'inline-block'}),
+    ], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'marginBottom': '20px'}),
+    
+    html.Div([
+        dcc.Graph(id='strategy-graph', style={'width': '100%', 'height': '100%'})
+    ], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center'})
 
-        fig = make_subplots(rows=1, cols=1, shared_xaxes=True, subplot_titles=('Price',))
-        fig.add_trace(go.Candlestick(x=df_filtered.index, open=df_filtered['open'], high=df_filtered['high'], low=df_filtered['low'], close=df_filtered['close'], name='Price'))
+], style={'padding': '20px', 'maxWidth': '1200px', 'margin': '0 auto'})
 
-        if hasattr(strategy, 'vwma14'):
-            vwma_values = np.array(strategy.vwma14.array)
-            vwma_values = vwma_values[-len(df):]  # 确保VWMA长度与df相同
-            vwma_filtered = vwma_values[mask]
-            fig.add_trace(go.Scatter(x=df_filtered.index, y=vwma_filtered, name='VWMA', line=dict(color='blue')))
 
-        if hasattr(strategy, 'buy_dates') and hasattr(strategy, 'sell_dates'):
-            buy_dates = pd.to_datetime(strategy.buy_dates)
-            sell_dates = pd.to_datetime(strategy.sell_dates)
-            
-            buy_dates = buy_dates[(buy_dates.date >= start_date) & (buy_dates.date <= end_date)]
-            sell_dates = sell_dates[(sell_dates.date >= start_date) & (sell_dates.date <= end_date)]
-            
-            buy_prices = df_filtered.loc[buy_dates, 'close']
-            sell_prices = df_filtered.loc[sell_dates, 'close']
+@app.callback(
+    [Output('strategy-graph', 'figure'),
+     Output('strategy-title', 'children')],
+    [Input('strategy-dropdown', 'value'),
+     Input('timeframe-dropdown', 'value'),
+     Input('benchmark-dropdown', 'value'),
+     Input('target-dropdown', 'value')]
+)
+def update_graph_and_title(strategy, timeframe, benchmark, target):
+    strategy_df = load_data(strategy, timeframe, target)
+    benchmark_df = load_data(benchmark, timeframe, target)
+    
+    if strategy_df.empty or benchmark_df.empty:
+        print("No data available for the selected parameters")
+        return go.Figure().add_annotation(text="No data available", showarrow=False, font=dict(size=20)), "No Data Available"
+    
+    figure = create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, target)
+    title = f'Visualisation - {strategy} vs {benchmark} - {timeframe} - {target}'
+    
+    return figure, title
 
-            fig.add_trace(go.Scatter(x=buy_dates, y=buy_prices, mode='markers', name='Buy', marker=dict(color='green', size=10, symbol='triangle-up')))
-            fig.add_trace(go.Scatter(x=sell_dates, y=sell_prices, mode='markers', name='Sell', marker=dict(color='red', size=10, symbol='triangle-down')))
-
-        fig.update_layout(title='Strategy Visualization', xaxis_rangeslider_visible=False)
-        return fig
-
-    return app
+if __name__ == '__main__':
+    app.run_server(debug=True)

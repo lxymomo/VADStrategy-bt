@@ -71,17 +71,17 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark):
 
     # 资金曲线（策略）
     fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['总资产'], mode='lines+markers', 
-                             name='Strategy Equity', marker=dict(color='navy', size=5)),
+                             name='Strategy Equity', marker=dict(color='red', size=1)),
                   row=2, col=1)
 
     # 资金曲线（基准）
     fig.add_trace(go.Scatter(x=benchmark_df['时间'], y=benchmark_df['总资产'], mode='lines+markers', 
-                             name='Benchmark Equity', marker=dict(color='red', size=5)),
+                             name='Benchmark Equity', marker=dict(color='grey', size=1)),
                   row=2, col=1)
 
     # 资金利用率（柱状图）
     fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['资金利用率'], mode='markers', 
-                         name='Capital Utilization Rate', marker=dict(color='orange', size=3)),
+                         name='Capital Utilization Rate', marker=dict(color='orange', size=1)),
                   row=3, col=1)
 
     # 更新图表

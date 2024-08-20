@@ -197,15 +197,17 @@ def print_analysis(results, num_years, strategy_name, data_name):
     返回 分析结果
 '''
 def main():
-
     # 运行所有策略组合
     for strategy_name, strategy_config in CONFIG['strategies'].items():
         for timeframe in strategy_config['enabled_timeframes']:
             data_file = CONFIG['data_files'][f'qqq_{timeframe}']
+            
+            target = data_file.split('_')[1]
+            
             strategy_params = strategy_config['params'][timeframe] if strategy_config['params'] else {}
 
             print(f"数据: {data_file} \n运行策略: {strategy_name}")
-            cerebro, results, num_years= run_strategy(data_file, strategy_name, strategy_params)
+            cerebro, results, num_years = run_strategy(data_file, strategy_name, strategy_params)
         
             strategy = results[0]
             df = strategy.trade_recorder.get_analysis()
@@ -221,19 +223,15 @@ def main():
             filtered_df['策略'] = strategy_name
             filtered_df['时间框架'] = timeframe
 
-            # output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades_all.csv"
-            # ensure_dir(output_file)
-            # df.to_csv(output_file, encoding='utf-8-sig')
-
-            output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_trades.csv"
+            output_file = f"{CONFIG['output_dir']}{strategy_name}_{timeframe}_{target}_trades.csv"
             ensure_dir(output_file)
             filtered_df.to_csv(output_file, encoding='utf-8-sig')
             print(f"\n交易记录已保存到: {output_file}")
 
-            output_df = f"{CONFIG['df_dir']}{strategy_name}_{timeframe}_all_trades.csv"
+            output_df = f"{CONFIG['df_dir']}{strategy_name}_{timeframe}_{target}_all_trades.csv"
             ensure_dir(output_df)
             df.to_csv(output_df, encoding='utf-8-sig')
-            print(f"可视化数据已保存到: {output_file}")
+            print(f"可视化数据已保存到: {output_df}")
             
             print(f"——————————————————————————————————————————————————————————————")
 

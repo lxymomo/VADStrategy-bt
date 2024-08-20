@@ -64,20 +64,40 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, tar
                          name='资金利用率', marker=dict(color='orange', size=1)),
                   row=3, col=1)
 
-    fig.update_layout(
-        height=1200,
-        xaxis_rangeslider_visible=False,
-        hovermode='x unified',
-        legend=dict(x=1.05, y=0.5),
-        margin=dict(l=50, r=50, t=50, b=50), 
-        autosize=True
-    )
+    for i in range(1, 4):
+        fig.update_xaxes(
+            title_text="时间" if i == 3 else "",
+            row=i, col=1,
+            type='date',
+            tickformatstops=[
+                dict(dtickrange=[None, 1000], value="%H:%M:%S.%L"),
+                dict(dtickrange=[1000, 60000], value="%H:%M:%S"),
+                dict(dtickrange=[60000, 3600000], value="%H:%M"),
+                dict(dtickrange=[3600000, 86400000], value="%H:%M"),
+                dict(dtickrange=[86400000, 604800000], value="%e. %b"),
+                dict(dtickrange=[604800000, "M1"], value="%e. %b"),
+                dict(dtickrange=["M1", "M12"], value="%b '%y"),
+                dict(dtickrange=["M12", None], value="%Y")
+            ],
+            hoverformat="%Y-%m-%d %H:%M:%S",
+            ticklabelmode="instant",
+            showticklabels=True  # 确保所有子图显示 x 轴标签
+        )
 
     fig.update_yaxes(title_text="价格", row=1, col=1)
     fig.update_yaxes(title_text="资产", row=2, col=1)
     fig.update_yaxes(title_text="资金利用率", row=3, col=1)
 
-    fig.update_xaxes(title_text="时间", row=3, col=1)
+    fig.update_layout(
+        height=1400,
+        xaxis_rangeslider=dict(visible=True, thickness=0.05),  # 保留第一个子图的 rangeslider
+        xaxis2_rangeslider_visible=False,
+        xaxis3_rangeslider_visible=False,
+        hovermode='x unified',
+        legend=dict(x=1.05, y=0.5),
+        margin=dict(l=50, r=50, t=50, b=50), 
+        autosize=True
+    )
 
     return fig
 

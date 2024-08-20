@@ -53,11 +53,11 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, tar
                              name='平仓信号'), row=1, col=1)
 
     fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['总资产'], mode='lines+markers', 
-                             name=f'{strategy} 总资产曲线', marker=dict(color='red', size=1)),
+                             name=f'{strategy} 资金曲线', marker=dict(color='red', size=1)),
                   row=2, col=1)
 
     fig.add_trace(go.Scatter(x=benchmark_df['时间'], y=benchmark_df['总资产'], mode='lines+markers', 
-                             name=f'{benchmark} 总资产曲线', marker=dict(color='grey', size=1)),
+                             name=f'{benchmark} 资金曲线', marker=dict(color='grey', size=1)),
                   row=2, col=1)
 
     fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['资金利用率'], mode='markers', 
@@ -81,22 +81,43 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, tar
             ],
             hoverformat="%Y-%m-%d %H:%M:%S",
             ticklabelmode="instant",
-            showticklabels=True  # 确保所有子图显示 x 轴标签
+            showticklabels=True
         )
 
     fig.update_yaxes(title_text="价格", row=1, col=1)
     fig.update_yaxes(title_text="资产", row=2, col=1)
     fig.update_yaxes(title_text="资金利用率", row=3, col=1)
 
+    # 获取数据的时间范围
+    date_min = strategy_df['时间'].min()
+    date_max = strategy_df['时间'].max()
+
     fig.update_layout(
         height=1400,
-        xaxis_rangeslider=dict(visible=True, thickness=0.05),  # 保留第一个子图的 rangeslider
-        xaxis2_rangeslider_visible=False,
-        xaxis3_rangeslider_visible=False,
+        xaxis=dict(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1M", step="month", stepmode="backward"),
+                    dict(count=3, label="3M", step="month", stepmode="backward"),
+                    dict(count=6, label="6M", step="month", stepmode="backward"),
+                    dict(count=1, label="1Y", step="year", stepmode="backward"),
+                    dict(step="all", label="All")
+                ]),
+                font=dict(size=10),
+                bgcolor='rgba(150, 200, 250, 0.4)',
+                activecolor='rgba(100, 150, 200, 0.8)'
+            ),
+            rangeslider=dict(visible=False),
+            type="date",
+            range=[date_min, date_max]  # 设置默认显示全部数据范围
+        ),
+        xaxis2=dict(rangeslider=dict(visible=False), range=[date_min, date_max]),
+        xaxis3=dict(rangeslider=dict(visible=False), range=[date_min, date_max]),
         hovermode='x unified',
         legend=dict(x=1.05, y=0.5),
-        margin=dict(l=50, r=50, t=50, b=50), 
-        autosize=True
+        margin=dict(l=50, r=50, t=80, b=50),
+        autosize=True,
+        uirevision='dataset'
     )
 
     return fig
@@ -104,7 +125,6 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, tar
 app.layout = html.Div([
     html.H1(id='strategy-title', style={'textAlign': 'center'}),
     
-    # 将所有下拉菜单放在一个 Div 中，并设置 flex 布局
     html.Div([
         html.Div([
             html.Label('策略:', style={'marginRight': '5px'}),
@@ -167,6 +187,7 @@ app.layout = html.Div([
     ], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center'})
 
 ], style={'padding': '20px', 'maxWidth': '1200px', 'margin': '0 auto'})
+
 
 @app.callback(
     [Output('strategy-graph', 'figure'),

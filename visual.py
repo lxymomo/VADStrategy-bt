@@ -22,22 +22,6 @@ def load_data(strategy, timeframe, target):
     else:
         return pd.DataFrame()  # 返回空DataFrame如果文件不存在
 
-'''
-# 定义数据目录
-数据目录 = 'visual/'
-
-定义 加载数据(strategy, timeframe):
-    文件名 = f"{策略}_{时间框架}_所有交易.csv"
-    文件路径 = os.path.join(数据目录, 文件名)
-    如果 os.path.exists(文件路径):
-        数据框 = pd.read_csv(文件路径)
-        数据框['时间'] = pd.to_datetime(数据框['时间'])
-        返回 数据框
-    否则:
-        返回 空数据框()  # 如果文件不存在，返回空数据框
-
-'''
-
 def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, target):
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
                         vertical_spacing=0.1, 
@@ -69,7 +53,7 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, tar
                              name='平仓信号'), row=1, col=1)
 
     fig.add_trace(go.Scatter(x=strategy_df['时间'], y=strategy_df['总资产'], mode='lines+markers', 
-                             name=f'{target} 总资产曲线', marker=dict(color='red', size=1)),
+                             name=f'{strategy} 总资产曲线', marker=dict(color='red', size=1)),
                   row=2, col=1)
 
     fig.add_trace(go.Scatter(x=benchmark_df['时间'], y=benchmark_df['总资产'], mode='lines+markers', 
@@ -81,12 +65,12 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, tar
                   row=3, col=1)
 
     fig.update_layout(
-        title=f'Strategy Visualization - {timeframe} {target} vs {benchmark}',
         height=1200,
-        width=1200,
         xaxis_rangeslider_visible=False,
         hovermode='x unified',
-        legend=dict(x=1.05, y=0.5)
+        legend=dict(x=1.05, y=0.5),
+        margin=dict(l=50, r=50, t=50, b=50), 
+        autosize=True
     )
 
     fig.update_yaxes(title_text="价格", row=1, col=1)
@@ -98,51 +82,92 @@ def create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, tar
     return fig
 
 app.layout = html.Div([
-    html.H1("Strategy Visualization"),
-    dcc.Dropdown(
-        id='timeframe-dropdown',
-        options=[
-            {'label': '5分钟', 'value': '5min'},
-            {'label': '240分钟', 'value': '240min'}
-        ],
-        value='240min'
-    ),
-    dcc.Dropdown(
-        id='target-dropdown',
-        options=[
-            {'label': 'QQQ', 'value': 'QQQ'},
-            {'label': 'BTC', 'value': 'BTC'},
-            {'label': '600519', 'value': '600519'}
-        ],
-        value='BTC'
-    ),
-    dcc.Dropdown(
-        id='benchmark-dropdown',
-        options=[
-            {'label': '买入并持有', 'value': 'buyandhold'},
-            {'label': '国债', 'value': 'treasury'},
-            {'label': 'BTC', 'value': 'btc'}
-        ],
-        value='buyandhold'
-    ),
-    dcc.Graph(id='strategy-graph')
-])
+    html.H1(id='strategy-title', style={'textAlign': 'center'}),
+    
+    # 将所有下拉菜单放在一个 Div 中，并设置 flex 布局
+    html.Div([
+        html.Div([
+            html.Label('策略:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='strategy-dropdown',
+                options=[
+                    {'label': 'VAD策略', 'value': 'vad'},
+                    {'label': '其他策略1', 'value': 'strategy1'},
+                    {'label': '其他策略2', 'value': 'strategy2'}
+                ],
+                value='vad',
+                style={'width': '150px'}
+            )
+        ], style={'display': 'inline-block', 'marginRight': '20px'}),
+        
+        html.Div([
+            html.Label('标的:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='target-dropdown',
+                options=[
+                    {'label': 'QQQ', 'value': 'QQQ'},
+                    {'label': 'BTC', 'value': 'BTC'},
+                    {'label': '600519', 'value': '600519'}
+                ],
+                value='QQQ',
+                style={'width': '120px'}
+            )
+        ], style={'display': 'inline-block', 'marginRight': '20px'}),
+
+        html.Div([
+            html.Label('时间框架:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='timeframe-dropdown',
+                options=[
+                    {'label': '5分钟', 'value': '5min'},
+                    {'label': '240分钟', 'value': '240min'}
+                ],
+                value='240min',
+                style={'width': '120px'}
+            )
+        ], style={'display': 'inline-block', 'marginRight': '20px'}),
+                
+        html.Div([
+            html.Label('基准:', style={'marginRight': '5px'}),
+            dcc.Dropdown(
+                id='benchmark-dropdown',
+                options=[
+                    {'label': '买入并持有', 'value': 'buyandhold'},
+                    {'label': '国债', 'value': 'treasury'},
+                    {'label': 'BTC', 'value': 'btc'}
+                ],
+                value='buyandhold',
+                style={'width': '150px'}
+            )
+        ], style={'display': 'inline-block'}),
+    ], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'marginBottom': '20px'}),
+    
+    html.Div([
+        dcc.Graph(id='strategy-graph', style={'width': '100%', 'height': '100%'})
+    ], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center'})
+
+], style={'padding': '20px', 'maxWidth': '1200px', 'margin': '0 auto'})
 
 @app.callback(
-    Output('strategy-graph', 'figure'),
-    [Input('timeframe-dropdown', 'value'),
+    [Output('strategy-graph', 'figure'),
+     Output('strategy-title', 'children')],
+    [Input('strategy-dropdown', 'value'),
+     Input('timeframe-dropdown', 'value'),
      Input('benchmark-dropdown', 'value'),
      Input('target-dropdown', 'value')]
 )
-
-def update_graph(timeframe, benchmark, target):
-    strategy_df = load_data('vad', timeframe, target)
+def update_graph_and_title(strategy, timeframe, benchmark, target):
+    strategy_df = load_data(strategy, timeframe, target)
     benchmark_df = load_data(benchmark, timeframe, target)
     
     if strategy_df.empty or benchmark_df.empty:
-        return go.Figure().add_annotation(text="No data available", showarrow=False, font=dict(size=20))
+        print("No data available for the selected parameters")
+        return go.Figure().add_annotation(text="No data available", showarrow=False, font=dict(size=20)), "No Data Available"
     
-    return create_figure(strategy_df, benchmark_df, timeframe, 'vad', benchmark, target)
+    figure = create_figure(strategy_df, benchmark_df, timeframe, strategy, benchmark, target)
+    title = f'Visualisation - {strategy} vs {benchmark} - {timeframe} - {target}'
+    
+    return figure, title
 
 if __name__ == '__main__':
     app.run_server(debug=True)

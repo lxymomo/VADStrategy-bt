@@ -539,3 +539,80 @@ class BuyAndHoldStrategy(bt.Strategy):
     def sell_signal(self):
         return False
     
+class Supertrend_pct(bt.Strategy):
+    params = (
+        ('timeframe', None),
+        ('k', None)
+    )
+
+    def __init__(self):
+        if self.p.timeframe not in CONFIG['strategies']['supertrend_pct']['enabled_timeframes']:
+            raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
+        
+        self.k = self.p.k
+
+    def next(self):
+        pass
+
+        self.trade_recorder.record()
+
+    def notify_order(self, order):
+        pass
+
+    def buy_signal(self):
+        pass
+
+    def sell_signal(self):
+        pass
+    
+class Supertrend_sd(bt.Strategy):
+    params = (
+        ('timeframe', None),
+        ('k', None)
+    )
+
+    def __init__(self):
+        if self.p.timeframe not in CONFIG['strategies']['supertrend_sd']['enabled_timeframes']:
+            raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
+
+        self.k = self.p.k
+
+    def next(self):
+        pass
+
+        self.trade_recorder.record()
+
+    def notify_order(self, order):
+        pass
+
+    def buy_signal(self):
+        pass
+
+    def sell_signal(self):
+        pass
+
+class Supertrend_mf(bt.Strategy):
+    params = (
+        ('timeframe', None),
+        ('k', None)
+    )
+
+    def __init__(self):
+        if self.p.timeframe not in CONFIG['strategies']['supertrend_mf']['enabled_timeframes']:
+            raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
+
+        self.k = self.p.k
+
+    def next(self):
+        pass
+
+        self.trade_recorder.record()
+
+    def notify_order(self, order):
+        pass
+
+    def buy_signal(self):
+        pass
+
+    def sell_signal(self):
+        pass

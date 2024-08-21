@@ -550,21 +550,65 @@ class Supertrend_pct(bt.Strategy):
             raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
         
         self.k = self.p.k
+        self.close = self.datas[0].close
+        self.order = None
+        self.last_price = None
 
     def next(self):
-        pass
+        friction_cost = CONFIG['friction_cost']
+        close_buy = self.data.close[0] * (1 + friction_cost)
+        close_sell = self.data.close[0] * (1 - friction_cost)
+        cash = self.broker.getcash() 
+        self.buy_signal_flag = False
+        self.sell_signal_flag = False
 
+        if self.order:
+            return 
+
+        if self.last_price is None:
+            self.last_price = self.close[0]
+            return
+
+        price_change = (self.close[0] - self.last_price) / self.last_price * 100
+
+        if price_change >= self.params.k:
+            if self.position.size <= 0:
+                size = int(cash / close_buy)
+                self.order = self.buy(size=size)
+                self.buy_signal_flag = True
+        
+        elif price_change <= -self.params.k:
+            if self.position.size > 0:
+                self.order = self.sell(size=size, price=close_sell)
+                self.sell_signal_flag = True
+
+            self.last_price = self.close[0]
+    
         self.trade_recorder.record()
 
     def notify_order(self, order):
-        pass
+        for analyzer in self.analyzers:
+            if hasattr(analyzer, 'notify_order'):
+                analyzer.notify_order(order)
+
+        if order.status in [order.Submitted, order.Accepted]:
+            return
+
+        if order.status in [order.Completed]:
+            self.trade_recorder.record(order)
+
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            print(f'订单失败。状态: {order.status}')
+
+        self.order = None
 
     def buy_signal(self):
-        pass
+        return self.buy_signal_flag
 
     def sell_signal(self):
-        pass
-    
+        return self.sell_signal_flag
+
+
 class Supertrend_sd(bt.Strategy):
     params = (
         ('timeframe', None),

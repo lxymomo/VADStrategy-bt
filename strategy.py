@@ -472,87 +472,62 @@ class BuyAndHoldStrategy(bt.Strategy):
             self.bought = False
             self.order = None
 
-        '''
-类 Buyandhold策略
-    参数 timeframe
-
-    初始化构造函数
-        if timeframe不在准许的timeframe:
-            警告
-        
-        交易 = 无
-        买入 = 无
-        交易次数 = 0
-        交易记录 = TradeRecorder()
-        已完成订单 = set()
-        第一根bar = True
-
-    方法 next():
-        cash = 当前现金
-        摩擦费用 = CONFIG设置
-        滑点调整后价格 = close * (1+滑点)
-
-        if 有一根bar 且 尚未买入 且 尚未交易:
-            交易量 = 现金/ 滑点调整后价格
-            向下取整
-
-            if 交易量>0:
-                买入
-                print 买入信息
-            else:
-                print 无法买入信息
-            
-        第一根bar = False
-        记录数据()
-
-    方法 notify_order()
-        遍历所有的analyzer
-            if 分析器有 notify_order方法
-            将当前订单信息，传递给所有分析器进行处理
-
-        if 订单状态已提交或接受，不处理
-
-        if 订单状态已完成 且 订单标识 不在 已处理订单:
-            标记订单处理
-            交易次数 += 1
-            订单时间= 当前时间
-
-            if 订单是买入：
-                print 买入信息
-                已有买入
-            无挂单
-            记录数据()
-
-        elif 订单状态有问题
-            print 有问题的状态
-
-    方法 buy_signal():
-        返回  无仓位 and 第一根bar，返回True（只在第一根bar买入）
-
-    方法 sell_signal():
-        返回 false（不发出卖出信号）
-        '''
-
     def buy_signal(self):
         return not self.position and self.first_bar
 
     def sell_signal(self):
         return False
-    
-class Supertrend_pct(bt.Strategy):
+
+
+class SupertrendATR(bt.Strategy):
+    params = (
+        ('timeframe', None),
+        ('vwma_period', None),
+        ('atr_period', None),
+        ('k', None)
+    )
+
+    def __init__(self):
+        if self.p.timeframe not in CONFIG['strategies']['SupertrendATR']['enabled_timeframes']:
+            raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
+
+        self.k = self.p.k
+        self.close = self.datas[0].close
+        self.order = None
+
+        self.vwma_period = self.p.vwma_period
+        self.vwma = VolumeWeightedMovingAverage(self.data, period=self.vwma_period)
+
+        self.atr_period = self.p.atr_period
+        self.atr = bt.indicators.ATR(self.data, period=self.atr_period)
+
+    def next(self):
+        long_signal = self.data.close < self.vwma - self.p.k * self.atr
+        short_signal = self.data.close > self.vwma + self.p.k * self.atr
+        friction_cost = CONFIG['friction_cost']
+        close_buy = self.data.close[0] * (1 + friction_cost)
+        close_sell = self.data.close[0] * (1 - friction_cost)
+        cash = self.broker.getcash() 
+        self.buy_signal_flag = False
+        self.sell_signal_flag = False
+
+        pass
+
+
+class SupertrendSd(bt.Strategy):
     params = (
         ('timeframe', None),
         ('k', None)
     )
 
     def __init__(self):
-        if self.p.timeframe not in CONFIG['strategies']['supertrend_pct']['enabled_timeframes']:
+        if self.p.timeframe not in CONFIG['strategies']['SupertrendSd']['enabled_timeframes']:
             raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
-        
+
         self.k = self.p.k
+        self.std = bt.indicators.StandardDeviation(self.data.close, period=len(self.data))
         self.close = self.datas[0].close
         self.order = None
-        self.last_price = None
 
     def next(self):
         friction_cost = CONFIG['friction_cost']
@@ -562,27 +537,21 @@ class Supertrend_pct(bt.Strategy):
         self.buy_signal_flag = False
         self.sell_signal_flag = False
 
+        # 检查是否有待处理的订单
         if self.order:
-            return 
-
-        if self.last_price is None:
-            self.last_price = self.close[0]
             return
 
-        price_change = (self.close[0] - self.last_price) / self.last_price * 100
-
-        if price_change >= self.params.k:
-            if self.position.size <= 0:
-                size = int(cash / close_buy)
+        # 检查是否已经持仓
+        if not self.position:
+            # 如果收盘价上涨超过k倍标准差，则全仓买入
+            if self.close[0] > self.close[-1] + self.p.k * self.std[0]:
+                size = cash / close_buy
                 self.order = self.buy(size=size)
-                self.buy_signal_flag = True
-        
-        elif price_change <= -self.params.k:
-            if self.position.size > 0:
+        else:
+            # 如果收盘价下跌超过k倍标准差，则全仓卖出
+            if self.close[0] < self.close[-1] - self.p.k * self.std[0]:
+                size = self.position.size
                 self.order = self.sell(size=size, price=close_sell)
-                self.sell_signal_flag = True
-
-            self.last_price = self.close[0]
     
         self.trade_recorder.record()
 
@@ -608,34 +577,7 @@ class Supertrend_pct(bt.Strategy):
     def sell_signal(self):
         return self.sell_signal_flag
 
-
-class Supertrend_sd(bt.Strategy):
-    params = (
-        ('timeframe', None),
-        ('k', None)
-    )
-
-    def __init__(self):
-        if self.p.timeframe not in CONFIG['strategies']['supertrend_sd']['enabled_timeframes']:
-            raise ValueError(f"不支持的timeframe: {self.p.timeframe}")
-
-        self.k = self.p.k
-
-    def next(self):
-        pass
-
-        self.trade_recorder.record()
-
-    def notify_order(self, order):
-        pass
-
-    def buy_signal(self):
-        pass
-
-    def sell_signal(self):
-        pass
-
-class Supertrend_mf(bt.Strategy):
+class SupertrendMf(bt.Strategy):
     params = (
         ('timeframe', None),
         ('k', None)

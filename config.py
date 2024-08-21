@@ -31,7 +31,24 @@ CONFIG = {
             'enabled_timeframes': ['5min', '240min'],
             'params': None
         },
-        'supertrend_pct':{
+
+        'SupertrendATR':{
+            'enabled_timeframes': ['5min', '240min'],
+            'params': {
+                '5min': {
+                    'k':1.6,
+                    'vwma_period': 14,
+                    'atr_period': 14
+                },
+                '240min': {
+                    'k':0.7,
+                    'vwma_period': 14,
+                    'atr_period': 14
+                }
+            }
+        },
+
+        'SupertrendSd':{
             'enabled_timeframes': ['5min', '240min'],
             'params': {
                 '5min': {
@@ -42,18 +59,7 @@ CONFIG = {
                 }
             }
         },
-        'supertrend_sd':{
-            'enabled_timeframes': ['5min', '240min'],
-            'params': {
-                '5min': {
-                    'k':3/100
-                },
-                '240min': {
-                    'k':1/100
-                }
-            }
-        },
-        'supertrend_mf':{
+        'SupertrendMf':{
             'enabled_timeframes': ['5min', '240min'],
             'params': {
                 '5min': {

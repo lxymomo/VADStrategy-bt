@@ -7,7 +7,6 @@ CONFIG = {
     # ↓ 调整策略适用的、不同时间周期的参数
     'strategies': {  
         'vad': {
-            # ↓ 准许适用5min, 240min参数，这一步是为了以后能放入更多数据
             'enabled_timeframes': ['5min', '240min'],  
             'params': { 
                 '5min': {
@@ -31,7 +30,40 @@ CONFIG = {
         'buyandhold': {
             'enabled_timeframes': ['5min', '240min'],
             'params': None
-        }
+        },
+        'supertrend_pct':{
+            'enabled_timeframes': ['5min', '240min'],
+            'params': {
+                '5min': {
+                    'k':3/100
+                },
+                '240min': {
+                    'k':1/100
+                }
+            }
+        },
+        'supertrend_sd':{
+            'enabled_timeframes': ['5min', '240min'],
+            'params': {
+                '5min': {
+                    'k':3/100
+                },
+                '240min': {
+                    'k':1/100
+                }
+            }
+        },
+        'supertrend_mf':{
+            'enabled_timeframes': ['5min', '240min'],
+            'params': {
+                '5min': {
+                    'k':3/100
+                },
+                '240min': {
+                    'k':1/100
+                }
+            }
+        },
     },
     'data_files': {
         'qqq_5min': 'processed/BATS_QQQ_5min.csv',   # 数据文件 QQQ 5min

@@ -6,31 +6,31 @@ CONFIG = {
 
     # ↓ 调整策略适用的、不同时间周期的参数
     'strategies': {  
-        'vad': {
-            'enabled_timeframes': ['5min', '240min'],  
-            'params': { 
-                '5min': {
-                    'k': 1.6,
-                    'base_order_amount': 10000,
-                    'dca_multiplier': 1.5,
-                    'max_additions': 4,
-                    'vwma_period': 14,
-                    'atr_period': 14
-                },
-                '240min': {
-                    'k': 0.7,
-                    'base_order_amount': 10000,
-                    'dca_multiplier': 1.5,
-                    'max_additions': 4,
-                    'vwma_period': 14,
-                    'atr_period': 14
-                }
-            }
-        },
-        'buyandhold': {
-            'enabled_timeframes': ['5min', '240min'],
-            'params': None
-        },
+        # 'vad': {
+        #     'enabled_timeframes': ['5min', '240min'],  
+        #     'params': { 
+        #         '5min': {
+        #             'k': 1.6,
+        #             'base_order_amount': 10000,
+        #             'dca_multiplier': 1.5,
+        #             'max_additions': 4,
+        #             'vwma_period': 14,
+        #             'atr_period': 14
+        #         },
+        #         '240min': {
+        #             'k': 0.7,
+        #             'base_order_amount': 10000,
+        #             'dca_multiplier': 1.5,
+        #             'max_additions': 4,
+        #             'vwma_period': 14,
+        #             'atr_period': 14
+        #         }
+        #     }
+        # },
+        # 'buyandhold': {
+        #     'enabled_timeframes': ['5min', '240min'],
+        #     'params': None
+        # },
 
         'SupertrendATR':{
             'enabled_timeframes': ['5min', '240min'],
@@ -63,10 +63,16 @@ CONFIG = {
             'enabled_timeframes': ['5min', '240min'],
             'params': {
                 '5min': {
-                    'k':3/100
+                    'p':1.6,
+                    'k':3/100,
+                    'vwma_period': 14,
+                    'atr_period': 14
                 },
                 '240min': {
-                    'k':1/100
+                    'p':0.7,
+                    'k':1/100,
+                    'vwma_period': 14,
+                    'atr_period': 14
                 }
             }
         },

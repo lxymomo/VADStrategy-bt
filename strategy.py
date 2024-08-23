@@ -447,6 +447,7 @@ class SupertrendMf(bt.Strategy):
 
         self.k = self.p.k
         self.p = self.p.p
+        self.std = bt.indicators.StandardDeviation(self.data.close, period=len(self.data))
         self.close = self.datas[0].close
         self.order = None
         self.trade_recorder = TradeRecorder(self)
@@ -460,7 +461,7 @@ class SupertrendMf(bt.Strategy):
     def next(self):
         ATR_long_signal = self.data.close < self.vwma - self.p.p * self.atr
         ATR_short_signal = self.data.close > self.vwma + self.p.p * self.atr
-
+ 
         SD_long_signal = self.close[0] > self.close[-1] + self.p.k * self.std[0]
         SD_short_signal = self.close[0] < self.close[-1] - self.p.k * self.std[0]
 
